@@ -1,14 +1,17 @@
 import { useEffect, useMemo } from "react";
 import type { CSSProperties } from "react";
+import { ClockFace } from "./components/ClockFace.tsx";
 import { DevBar } from "./components/DevBar.tsx";
 import { MusicView } from "./components/MusicView.tsx";
 import { PeekBar, Pill } from "./components/Pill.tsx";
 import { SettingsView } from "./components/SettingsView.tsx";
 import { ToolsView } from "./components/ToolsView.tsx";
 import { useBackend } from "./lib/backend.ts";
+import { formatCompactClock } from "./lib/clock.ts";
 import { formatTime } from "./lib/format.ts";
 import { islandSize, isExpanded } from "./lib/layout.ts";
 import type { Phase } from "./lib/pomodoro.ts";
+import { useLiveClock } from "./lib/useLiveClock.ts";
 import { useFocusTimer } from "./state/useFocusTimer.ts";
 import { useDragOrClick, useIsland, useWindowFit } from "./state/useIsland.ts";
 import { useMedia, usePosition } from "./state/useMedia.ts";
@@ -29,27 +32,44 @@ export default function App() {
   const active = media.state.active;
 
   const trackKey = active ? `${active.id}|${active.track.title}|${active.track.artist}` : null;
-  const island = useIsland({ settings, trackKey, playing: active?.status === "playing" });
+  const island = useIsland({
+    settings,
+    trackKey,
+    playing: active?.status === "playing",
+    hasMedia: active !== null,
+    activeStatus: active?.status ?? null,
+  });
   const timer = useFocusTimer(settings.focus, (phase) => island.showMessage(FINISHED_TEXT[phase]));
+  const liveClock = useLiveClock(settings.clockFormat, settings.showSeconds);
 
   const expanded = isExpanded(island.view);
   const position = usePosition(active, island.view === "music");
   const timerInPill = timer.running && island.view === "collapsed";
+  const timerInClock = timer.running && island.view === "clock";
 
   const target = islandSize({
     view: island.view,
     density: settings.density,
     hasMedia: active !== null,
     multiPlayer: media.state.players.length > 1,
-    timerInPill,
+    timerInPill: timerInPill || timerInClock,
+    showSeconds: settings.showSeconds,
   });
   const motionOn = settings.animation !== "off" && !prefersReducedMotion();
   const drawn = useWindowFit(target, motionOn);
 
   const command = (a: ControlAction) => backend.mediaCommand(a);
-  const dragOrClick = useDragOrClick(() => island.setBase(island.base === "collapsed" ? "music" : "collapsed"));
+  const dragOrClick = useDragOrClick(() => island.toggleExpand());
 
-  const accent = settings.theme === "adaptive" ? media.accent?.hex : undefined;
+  // Default subtle lavender glow for idle clock state
+  const idleAccent = "#8f7bff";
+  const accent =
+    settings.theme === "adaptive"
+      ? island.view === "clock"
+        ? idleAccent
+        : (media.accent?.hex ?? idleAccent)
+      : undefined;
+
   const style = useMemo(
     () => ({ width: drawn.w, height: drawn.h, ...(accent ? { "--accent": accent } : {}) }) as CSSProperties,
     [drawn.w, drawn.h, accent],
@@ -63,7 +83,8 @@ export default function App() {
     return () => document.removeEventListener("visibilitychange", onVis);
   }, []);
 
-  const timerLabel = timerInPill ? formatTime(timer.remainingMs) : null;
+  const timerLabel = timerInPill || timerInClock ? formatTime(timer.remainingMs) : null;
+  const compactClock = formatCompactClock(liveClock.now, settings.clockFormat);
 
   return (
     <div
@@ -82,26 +103,64 @@ export default function App() {
         {...island.pointer}
       >
         <div className="island-glow" aria-hidden="true" />
-        {island.view === "collapsed" && (
-          <div className="face face-pill" {...dragOrClick}>
-            <Pill media={media} timerLabel={timerLabel} />
+
+        {/* State A: Idle Clock - Nothing Playing */}
+        {island.view === "clock" && (
+          <div className="face face-clock" {...dragOrClick}>
+            <ClockFace
+              clockFormat={settings.clockFormat}
+              showSeconds={settings.showSeconds}
+              timerLabel={timerInClock ? timerLabel : null}
+              compact={settings.density === "compact"}
+            />
           </div>
         )}
+
+        {/* State B: Music Mode - Collapsed Pill */}
+        {island.view === "collapsed" && (
+          <div className="face face-pill" {...dragOrClick}>
+            <Pill media={media} timerLabel={timerInPill ? timerLabel : null} clockTime={compactClock} />
+          </div>
+        )}
+
+        {/* Notification peek */}
         {island.view === "peek" && island.peek && (
           <div className="face face-pill" {...dragOrClick}>
             <PeekBar media={media} peek={island.peek} />
           </div>
         )}
+
+        {/* Expanded View: Full Music Player */}
         {island.view === "music" && (
           <Face>
-            <MusicView media={media} position={position} density={settings.density} command={command} pin={(id) => backend.pinPlayer(id)} go={island.setBase} />
+            <MusicView
+              media={media}
+              position={position}
+              density={settings.density}
+              command={command}
+              pin={(id) => backend.pinPlayer(id)}
+              go={island.setBase}
+            />
           </Face>
         )}
+
+        {/* Expanded View: Companion Panel */}
         {island.view === "tools" && (
           <Face>
-            <ToolsView timer={timer} roundsBeforeLong={settings.focus.roundsBeforeLong} go={island.setBase} />
+            <ToolsView
+              timer={timer}
+              roundsBeforeLong={settings.focus.roundsBeforeLong}
+              media={media}
+              clockFormat={settings.clockFormat}
+              showSeconds={settings.showSeconds}
+              onUpdateSettings={settingsApi.update}
+              onMediaCommand={command}
+              go={island.setBase}
+            />
           </Face>
         )}
+
+        {/* Expanded View: Settings */}
         {island.view === "settings" && (
           <Face>
             <SettingsView api={settingsApi} go={island.setBase} />

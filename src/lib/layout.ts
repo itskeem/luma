@@ -7,7 +7,7 @@ export const PAD = 14;
 /** Matches --dur in tokens.css. */
 export const TRANSITION_MS = 380;
 
-export type View = "collapsed" | "peek" | "music" | "tools" | "settings";
+export type View = "clock" | "collapsed" | "peek" | "music" | "tools" | "settings";
 
 export interface Size {
   w: number;
@@ -20,15 +20,23 @@ export interface LayoutInput {
   hasMedia: boolean;
   /** More than one player: the music view gets a row to choose between them. */
   multiPlayer: boolean;
-  /** The collapsed pill shows the focus countdown. */
+  /** The collapsed pill or idle clock shows the focus countdown. */
   timerInPill: boolean;
+  /** Whether seconds are shown on the idle clock. */
+  showSeconds?: boolean;
 }
 
-export function islandSize({ view, density, hasMedia, multiPlayer, timerInPill }: LayoutInput): Size {
+export function islandSize({ view, density, hasMedia, multiPlayer, timerInPill, showSeconds = false }: LayoutInput): Size {
   const compact = density === "compact";
   switch (view) {
+    case "clock":
+      return compact
+        ? { w: (showSeconds ? 204 : 184) + (timerInPill ? 50 : 0), h: 52 }
+        : { w: (showSeconds ? 228 : 208) + (timerInPill ? 54 : 0), h: 60 };
     case "collapsed":
-      return { w: (hasMedia ? 188 : 116) + (timerInPill ? 52 : 0), h: 38 };
+      return compact
+        ? { w: (hasMedia ? 198 : 116) + (timerInPill ? 50 : 0), h: 38 }
+        : { w: (hasMedia ? 212 : 124) + (timerInPill ? 54 : 0), h: 38 };
     case "peek":
       return { w: 312, h: 46 };
     case "music":
@@ -38,9 +46,11 @@ export function islandSize({ view, density, hasMedia, multiPlayer, timerInPill }
         ? { w: 344, h: 174 + (multiPlayer ? 32 : 0) }
         : { w: 392, h: 222 + (multiPlayer ? 34 : 0) };
     case "tools":
-      return compact ? { w: 344, h: 214 } : { w: 392, h: 244 };
+      return compact
+        ? { w: 352, h: hasMedia ? 300 : 246 }
+        : { w: 392, h: hasMedia ? 332 : 272 };
     case "settings":
-      return compact ? { w: 360, h: 392 } : { w: 392, h: 420 };
+      return compact ? { w: 360, h: 436 } : { w: 392, h: 468 };
   }
 }
 

@@ -9,7 +9,7 @@ import type { Backend, Unlisten } from "../lib/backend.ts";
 import type { ActiveMedia, ControlAction, MediaState, PlayerSummary, Settings } from "../types.ts";
 import { DEFAULT_SETTINGS } from "../types.ts";
 
-const SCENARIOS = ["playing", "paused", "multi", "no-metadata", "nothing-playing", "unavailable"] as const;
+const SCENARIOS = ["nothing-playing", "playing", "paused", "multi", "no-metadata", "unavailable"] as const;
 
 const TRACKS = [
   { title: "Midnight Drive", artist: "Neon Harbor", album: "After Hours", durationMs: 214_000, hue: 268 },
@@ -36,8 +36,8 @@ export function createPreviewBackend(): Backend {
     }
   })();
   let settings: Settings = { ...DEFAULT_SETTINGS, ...(stored ?? {}) };
-  let scenario: string = new URLSearchParams(location.search).get("scenario") ?? "playing";
-  if (!(SCENARIOS as readonly string[]).includes(scenario)) scenario = "playing";
+  let scenario: string = new URLSearchParams(location.search).get("scenario") ?? "nothing-playing";
+  if (!(SCENARIOS as readonly string[]).includes(scenario)) scenario = "nothing-playing";
 
   let index = 0;
   let playing = scenario !== "paused";

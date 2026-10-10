@@ -1,7 +1,7 @@
 import { useBackend } from "../lib/backend.ts";
 import type { SettingsApi } from "../state/useSettings.ts";
 import type { BaseView } from "../state/useIsland.ts";
-import type { Animation, Density, IdleBehavior, PositionPreset, Theme } from "../types.ts";
+import type { Animation, ClockFormat, Density, IdleBehavior, PositionPreset, Theme } from "../types.ts";
 import { Row, Section, Segmented, Stepper, Toggle } from "./controls.tsx";
 import { Nav } from "./MusicView.tsx";
 
@@ -41,6 +41,40 @@ export function SettingsView({ api, go }: { api: SettingsApi; go: (v: BaseView) 
           </Row>
           <Row label="Animation" hint="Equalizer and transitions">
             <Segmented<Animation> label="Animation" value={s.animation} onChange={(animation) => update({ animation })} options={[{ value: "off", label: "Off" }, { value: "subtle", label: "Subtle" }, { value: "full", label: "Full" }]} />
+          </Row>
+        </Section>
+
+        <Section title="Clock & Companion">
+          <Row label="Time format">
+            <Segmented<ClockFormat>
+              label="Time format"
+              value={s.clockFormat}
+              onChange={(clockFormat) => update({ clockFormat })}
+              options={[
+                { value: "24h", label: "24-hour" },
+                { value: "12h", label: "12-hour" },
+              ]}
+            />
+          </Row>
+          <Row label="Seconds display">
+            <Toggle
+              label="Show seconds"
+              checked={s.showSeconds}
+              onChange={(showSeconds) => update({ showSeconds })}
+            />
+          </Row>
+          <Row label="Pause timeout" hint="Return to clock after music pauses">
+            <Segmented<number>
+              label="Pause timeout"
+              value={s.pauseDelaySecs}
+              onChange={(pauseDelaySecs) => update({ pauseDelaySecs })}
+              options={[
+                { value: 0, label: "Instant" },
+                { value: 5, label: "5 s" },
+                { value: 8, label: "8 s" },
+                { value: 20, label: "20 s" },
+              ]}
+            />
           </Row>
         </Section>
 

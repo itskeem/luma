@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useBackend } from "../lib/backend.ts";
 import { isExpanded, PAD, TRANSITION_MS, windowSize, type Size, type View } from "../lib/layout.ts";
-import type { Settings } from "../types.ts";
+import type { PlaybackStatus, Settings } from "../types.ts";
 
 export type BaseView = Exclude<View, "peek">;
 export type Peek = { kind: "track" } | { kind: "message"; text: string };
@@ -16,36 +16,77 @@ interface Inputs {
   /** Identity of the current track; a change while collapsed triggers a peek. */
   trackKey: string | null;
   playing: boolean;
+  hasMedia: boolean;
+  activeStatus: PlaybackStatus | null;
 }
 
 export interface IslandController {
   view: View;
   base: BaseView;
   peek: Peek | null;
+  collapsedFace: "clock" | "collapsed";
   setBase: (v: BaseView) => void;
+  toggleExpand: () => void;
   showMessage: (text: string) => void;
   dimmed: boolean;
   pointer: { onPointerEnter: () => void; onPointerLeave: () => void };
 }
 
 /**
- * Which face the island shows (collapsed, a short peek, or one of three
- * expanded views) and the timers behind it: open on hover, fold after the
- * pointer leaves, peek on track change, dim when idle.
+ * State machine managing the adaptive island:
+ * - State A (Idle Clock): default when no music is playing or pause delay expired
+ * - State B (Music Mode): active when music is playing (or within pause delay)
+ * - Peek overlay: brief track notifications or focus timer announcements
+ * - Expanded panels: Companion panel (tools), full Music player, or Settings
  */
-export function useIsland({ settings, trackKey, playing }: Inputs): IslandController {
+export function useIsland({ settings, trackKey, playing, hasMedia, activeStatus }: Inputs): IslandController {
   const backend = useBackend();
-  const [base, setBase] = useState<BaseView>("collapsed");
+  const [base, setBase] = useState<BaseView>("clock");
   const [peek, setPeek] = useState<Peek | null>(null);
   const [inside, setInside] = useState(false);
   const [dimmed, setDimmed] = useState(false);
 
-  // Peek when the track changes while the island is folded. Derived during render
-  // (not in an effect) so it shows on the same frame as the new track.
+  // Pause delay: stay in music pill for pauseDelaySecs when paused before returning to clock.
+  const [pauseTimedOut, setPauseTimedOut] = useState(!playing);
+  const [prevPlaying, setPrevPlaying] = useState(playing);
+  if (prevPlaying !== playing) {
+    setPrevPlaying(playing);
+    if (playing) {
+      setPauseTimedOut(false);
+    }
+  }
+
+  useEffect(() => {
+    if (playing || !hasMedia || pauseTimedOut || settings.pauseDelaySecs <= 0) return;
+
+    const timer = window.setTimeout(() => {
+      setPauseTimedOut(true);
+    }, settings.pauseDelaySecs * 1000);
+
+    return () => window.clearTimeout(timer);
+  }, [playing, hasMedia, pauseTimedOut, settings.pauseDelaySecs]);
+
+  // Derived collapsed appearance: Idle Clock vs Music Pill
+  // When activeStatus is "loading", avoid rapidly flashing back to clock
+  const isClock =
+    !hasMedia || (!playing && activeStatus !== "loading" && (settings.pauseDelaySecs <= 0 || pauseTimedOut));
+  const collapsedFace: "clock" | "collapsed" = isClock ? "clock" : "collapsed";
+
+  // When unexpanded, align base with collapsedFace
+  const effectiveBase: BaseView = isExpanded(base) ? base : collapsedFace;
+
+  // Track peek: when track changes while folded and music is playing
   const [seenTrack, setSeenTrack] = useState(trackKey);
   if (seenTrack !== trackKey) {
     setSeenTrack(trackKey);
-    if (seenTrack !== null && trackKey !== null && playing && settings.peekOnTrackChange && base === "collapsed" && !inside) {
+    if (
+      seenTrack !== null &&
+      trackKey !== null &&
+      playing &&
+      settings.peekOnTrackChange &&
+      !isExpanded(effectiveBase) &&
+      !inside
+    ) {
       setPeek({ kind: "track" });
     }
   }
@@ -56,51 +97,68 @@ export function useIsland({ settings, trackKey, playing }: Inputs): IslandContro
     return () => window.clearTimeout(id);
   }, [peek]);
 
-  // Open on hover.
+  // Open on hover: opens music if playing, companion tools if clock
   useEffect(() => {
-    if (!settings.openOnHover || !inside || base !== "collapsed") return;
-    const id = window.setTimeout(() => setBase("music"), HOVER_OPEN_MS);
+    if (!settings.openOnHover || !inside || isExpanded(base)) return;
+    const targetView: BaseView = playing ? "music" : "tools";
+    const id = window.setTimeout(() => setBase(targetView), HOVER_OPEN_MS);
     return () => window.clearTimeout(id);
-  }, [settings.openOnHover, inside, base]);
+  }, [settings.openOnHover, inside, base, playing]);
 
-  // Fold again after the pointer has been away for a while.
+  // Fold again after pointer has left
   useEffect(() => {
     if (!isExpanded(base) || inside || settings.autoCollapseSecs <= 0) return;
-    const id = window.setTimeout(() => setBase("collapsed"), settings.autoCollapseSecs * 1000);
+    const id = window.setTimeout(() => setBase(collapsedFace), settings.autoCollapseSecs * 1000);
     return () => window.clearTimeout(id);
-  }, [base, inside, settings.autoCollapseSecs]);
+  }, [base, inside, settings.autoCollapseSecs, collapsedFace]);
 
-  // Dim when nothing is playing and nobody is interacting.
-  const wantDim = settings.idle === "dim" && !playing && !inside && base === "collapsed" && !peek;
+  // Dim when nothing is playing and nobody is interacting
+  const wantDim = settings.idle === "dim" && !playing && !inside && !isExpanded(base) && !peek;
   useEffect(() => {
     const id = window.setTimeout(() => setDimmed(wantDim), wantDim ? DIM_AFTER_MS : 0);
     return () => window.clearTimeout(id);
   }, [wantDim]);
 
-  // The tray's "Settings…" and similar requests from the backend.
+  // Handle external navigation requests (e.g. from system tray)
   useEffect(() => {
     let dead = false;
     let off: (() => void) | undefined;
-    void backend.onNavigate((v) => {
-      if (v === "settings" || v === "music" || v === "tools") setBase(v);
-    }).then((u) => {
-      if (dead) u();
-      else off = u;
-    });
+    void backend
+      .onNavigate((v) => {
+        if (v === "settings" || v === "music" || v === "tools") setBase(v);
+      })
+      .then((u) => {
+        if (dead) u();
+        else off = u;
+      });
     return () => {
       dead = true;
       off?.();
     };
   }, [backend]);
 
+  const view: View = peek && !isExpanded(effectiveBase) ? "peek" : effectiveBase;
+
+  const toggleExpand = () => {
+    if (isExpanded(effectiveBase)) {
+      setBase(collapsedFace);
+    } else if (effectiveBase === "clock") {
+      setBase("tools");
+    } else {
+      setBase("music");
+    }
+  };
+
   return {
-    view: peek && base === "collapsed" ? "peek" : base,
-    base,
+    view,
+    base: effectiveBase,
     peek,
+    collapsedFace,
     setBase: (v) => {
       setPeek(null);
       setBase(v);
     },
+    toggleExpand,
     showMessage: (text) => setPeek({ kind: "message", text }),
     dimmed,
     pointer: { onPointerEnter: () => setInside(true), onPointerLeave: () => setInside(false) },
@@ -111,9 +169,8 @@ export function useIsland({ settings, trackKey, playing }: Inputs): IslandContro
  * Keeps the native window in step with the island, and returns the size the
  * island should be drawn at.
  *
- * A window cannot animate, so the two are sequenced: to grow, the window grows
- * first (it is transparent, so nobody sees it) and then the island animates
- * into the room; to shrink, the island animates first and the window follows.
+ * Sequenced resizing avoids clipping: window expands first, then island animates;
+ * island shrinks first, then window snaps.
  */
 export function useWindowFit(target: Size, animate: boolean): Size {
   const backend = useBackend();
@@ -154,7 +211,7 @@ export function useWindowFit(target: Size, animate: boolean): Size {
   return drawn;
 }
 
-/** Click toggles; press-and-move drags the window (native drag, so edges and snapping behave). */
+/** Click toggles; press-and-move drags the window natively. */
 export function useDragOrClick(onClick: () => void) {
   const backend = useBackend();
   const start = useRef<{ x: number; y: number } | null>(null);

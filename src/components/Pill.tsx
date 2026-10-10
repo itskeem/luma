@@ -7,16 +7,17 @@ import { Equalizer } from "./Equalizer.tsx";
 interface PillProps {
   media: MediaView;
   timerLabel: string | null;
+  clockTime?: string | null;
 }
 
-/** The collapsed island: a thumbnail, a tiny equalizer and, if running, the focus countdown. */
-export function Pill({ media, timerLabel }: PillProps) {
+/** The collapsed island: a thumbnail, a tiny equalizer, a subtle clock and focus countdown. */
+export function Pill({ media, timerLabel, clockTime }: PillProps) {
   const active = media.state.active;
   if (!active) {
     return (
       <div className="pill pill-idle">
         <img className="pill-orb" src={orb} alt="" draggable={false} />
-        <span className="pill-name">{timerLabel ?? "Luma"}</span>
+        <span className="pill-name">{clockTime ?? timerLabel ?? "Luma"}</span>
       </div>
     );
   }
@@ -26,6 +27,7 @@ export function Pill({ media, timerLabel }: PillProps) {
       <Artwork src={media.artworkUrl} size={24} brand />
       <Equalizer playing={playing} bars={4} />
       <span className="pill-spacer" />
+      {clockTime && <span className="pill-clock">{clockTime}</span>}
       {timerLabel && <span className="pill-timer">{timerLabel}</span>}
       <span className="pill-dot" data-playing={playing} title={playing ? "Playing" : "Paused"} />
     </div>

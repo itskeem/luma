@@ -25,8 +25,10 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   flex: none;
   border-radius: var(--r-island);
   background: var(--surface);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--border);
-  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.4), 0 0 0 0.5px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.42), 0 0 0 0.5px rgba(0, 0, 0, 0.55);
   transition:
     width var(--dur) var(--ease),
     height var(--dur) var(--ease),
@@ -34,29 +36,152 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     opacity 500ms ease,
     --accent 700ms linear;
 }
+.island[data-view="clock"] { border-radius: 20px; }
 .island[data-view="collapsed"], .island[data-view="peek"] { border-radius: 19px; }
 .stage[data-dim="true"] .island { opacity: 0.5; }
 .stage[data-dim="true"] .island:hover { opacity: 1; }
 
-/* Soft light from the artwork's accent, top-left; restrained on purpose. */
+/* Soft atmospheric light from the accent, top-left; restrained on purpose. */
 .island-glow {
   position: absolute;
   inset: 0;
   pointer-events: none;
   background:
     radial-gradient(90% 130% at 0% 0%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 62%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.045), transparent 38%);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 38%);
 }
 
 .face { position: absolute; inset: 0; animation: face-in 280ms 80ms var(--ease) both; }
 .face-pill { display: flex; align-items: center; padding: 0 12px; cursor: pointer; }
+.face-clock { display: flex; align-items: center; padding: 0 14px; cursor: pointer; height: 100%; }
+.face-clock:hover .clock-orb-glow { opacity: 0.9; }
 @keyframes face-in { from { opacity: 0; transform: translateY(3px); } }
+
+/* ── State A: Idle Clock Island ── */
+.clock-island {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+}
+.clock-left {
+  flex: none;
+  display: flex;
+  align-items: center;
+}
+.clock-orb-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+}
+.clock-orb {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  z-index: 1;
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 45%, transparent));
+}
+.clock-orb-glow {
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 40%, transparent), transparent 70%);
+  opacity: 0.65;
+  transition: opacity var(--dur-fast);
+  pointer-events: none;
+}
+.clock-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.clock-primary-time {
+  font: 600 25px/1.05 var(--font-display);
+  letter-spacing: -0.025em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  display: flex;
+  align-items: baseline;
+  gap: 1px;
+}
+.clock-primary-time .time-digits {
+  font-weight: 600;
+}
+.clock-primary-time .time-seconds {
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0.65;
+  margin-left: 2px;
+}
+.clock-primary-time .time-period {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  margin-left: 5px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--surface-2);
+}
+.clock-subtitle {
+  margin-top: 3px;
+  display: flex;
+  align-items: center;
+}
+.date-badge {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.clock-island[data-compact="true"] .clock-primary-time {
+  font-size: 21px;
+}
+.clock-island[data-compact="true"] .date-badge {
+  font-size: 8.5px;
+}
+.clock-timer-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  flex: none;
+}
+.chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 75%, transparent);
+}
+.chip-text {
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
 
 /* ── Pill & peek ── */
 .pill, .peek { display: flex; align-items: center; gap: 10px; width: 100%; height: 100%; min-width: 0; }
 .pill-spacer { flex: 1; }
 .pill-orb { width: 24px; height: auto; flex: none; }
 .pill-name { font-size: 12px; color: var(--text-2); letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
+.pill-clock { font-size: 11px; font-variant-numeric: tabular-nums; color: var(--text-2); padding: 0 3px; letter-spacing: 0.02em; }
 .pill-timer { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--text-2); }
 .pill-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 70%, transparent); flex: none; transition: background var(--dur-fast), box-shadow var(--dur-fast); }
 .pill-dot[data-playing="false"] { background: transparent; box-shadow: inset 0 0 0 1.5px var(--text-3); }
@@ -131,11 +256,108 @@ button:disabled { opacity: 0.3; cursor: default; }
 .empty-title { margin: 0; font: 600 16px var(--font-display); }
 .empty-text { margin: 6px 0 0; font-size: 12.5px; color: var(--text-2); line-height: 1.45; max-width: 38ch; }
 
-/* ── Tools ── */
-.tools { padding: 16px 18px; }
+/* ── Tools / Companion Panel ── */
+.tools { padding: 14px 18px 12px; }
 .tools-head { display: flex; justify-content: space-between; align-items: flex-start; }
-.clock-time { font: 600 34px/1 var(--font-display); letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
-.clock-date { margin-top: 6px; font-size: 12px; color: var(--text-2); }
+.tools-clock-group { display: flex; flex-direction: column; }
+.tools-time-row { display: flex; align-items: baseline; gap: 2px; }
+.clock-time { font: 600 32px/1 var(--font-display); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.clock-time-sec { font-size: 16px; font-weight: 500; opacity: 0.65; margin-left: 2px; }
+.clock-time-period { font-size: 12px; font-weight: 600; opacity: 0.7; text-transform: uppercase; margin-left: 4px; }
+.btn-format-pill {
+  margin-left: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  padding: 2px 7px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-2);
+  cursor: pointer;
+  align-self: center;
+  transition: background var(--dur-fast), color var(--dur-fast);
+}
+.btn-format-pill:hover { background: var(--surface-3); color: var(--text); }
+.clock-date { margin-top: 4px; font-size: 11.5px; color: var(--text-2); }
+
+/* Companion Music Shortcut Card */
+.companion-music-card {
+  margin: 10px 0 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: background var(--dur-fast), border-color var(--dur-fast);
+}
+.companion-music-card:hover {
+  background: var(--surface-3);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+.companion-music-art {
+  border-radius: 6px;
+  overflow: hidden;
+  flex: none;
+  cursor: pointer;
+}
+.companion-music-meta {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+.companion-music-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+.companion-music-artist {
+  margin-top: 1px;
+  font-size: 11px;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.companion-music-artist .status-label {
+  color: var(--accent);
+  font-weight: 500;
+}
+.companion-music-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.btn-round-mini {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background var(--dur-fast), color var(--dur-fast);
+}
+.btn-round-mini:hover:not(:disabled) {
+  background: var(--surface-3);
+  color: var(--text);
+}
+.btn-round-mini.btn-primary {
+  background: var(--text);
+  color: #101014;
+}
+.btn-round-mini.btn-primary:hover:not(:disabled) {
+  background: #fff;
+}
+
 .focus { margin-top: auto; display: grid; grid-template-columns: 68px 1fr auto; gap: 14px; align-items: center; padding: 12px 14px; border-radius: 16px; background: var(--surface-2); border: 1px solid var(--border); }
 .ring svg { width: 68px; height: 68px; display: block; }
 .ring-track { fill: none; stroke: var(--surface-3); stroke-width: 5; }

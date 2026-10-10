@@ -89,6 +89,19 @@ impl Default for FocusSettings {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum ClockFormat {
+    #[default]
+    #[serde(rename = "24h")]
+    H24,
+    #[serde(rename = "12h")]
+    H12,
+}
+
+fn default_pause_delay() -> u32 {
+    8
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -107,6 +120,12 @@ pub struct Settings {
     pub idle: IdleBehavior,
     pub launch_at_startup: bool,
     pub focus: FocusSettings,
+    #[serde(default)]
+    pub clock_format: ClockFormat,
+    #[serde(default)]
+    pub show_seconds: bool,
+    #[serde(default = "default_pause_delay")]
+    pub pause_delay_secs: u32,
 }
 
 impl Default for Settings {
@@ -124,6 +143,9 @@ impl Default for Settings {
             idle: IdleBehavior::default(),
             launch_at_startup: false,
             focus: FocusSettings::default(),
+            clock_format: ClockFormat::default(),
+            show_seconds: false,
+            pause_delay_secs: 8,
         }
     }
 }
@@ -134,6 +156,7 @@ impl Settings {
     pub fn sanitize(&mut self) {
         self.version = SETTINGS_VERSION;
         self.auto_collapse_secs = self.auto_collapse_secs.min(120);
+        self.pause_delay_secs = self.pause_delay_secs.min(120);
         self.focus.focus_min = self.focus.focus_min.clamp(1, 180);
         self.focus.short_break_min = self.focus.short_break_min.clamp(1, 60);
         self.focus.long_break_min = self.focus.long_break_min.clamp(1, 120);
@@ -211,6 +234,9 @@ mod tests {
         assert_eq!(s.position, Position::TopCenter);
         assert!(!s.launch_at_startup);
         assert_eq!(s.focus.focus_min, 25);
+        assert_eq!(s.clock_format, ClockFormat::H24);
+        assert!(!s.show_seconds);
+        assert_eq!(s.pause_delay_secs, 8);
     }
 
     #[test]
@@ -223,7 +249,14 @@ mod tests {
     #[test]
     fn settings_round_trip() {
         let path = temp_path("roundtrip");
-        let mut s = Settings { theme: Theme::Luma, density: Density::Compact, ..Settings::default() };
+        let mut s = Settings {
+            theme: Theme::Luma,
+            density: Density::Compact,
+            clock_format: ClockFormat::H12,
+            show_seconds: true,
+            pause_delay_secs: 15,
+            ..Settings::default()
+        };
         s.custom_anchor = Some(CustomAnchor {
             monitor_name: "DELL".into(),
             monitor_x: -2560,
@@ -250,6 +283,9 @@ mod tests {
         assert_eq!(s.focus.focus_min, 40);
         assert_eq!(s.focus.short_break_min, 5);
         assert_eq!(s.animation, Animation::Full);
+        assert_eq!(s.clock_format, ClockFormat::H24);
+        assert!(!s.show_seconds);
+        assert_eq!(s.pause_delay_secs, 8);
     }
 
     #[test]
@@ -276,12 +312,14 @@ mod tests {
     fn sanitize_clamps_and_repairs() {
         let mut s = Settings::default();
         s.auto_collapse_secs = 99_999;
+        s.pause_delay_secs = 999;
         s.focus.focus_min = 0;
         s.focus.short_break_min = 999;
         s.focus.rounds_before_long = 1;
         s.position = Position::Custom; // but no anchor
         s.sanitize();
         assert_eq!(s.auto_collapse_secs, 120);
+        assert_eq!(s.pause_delay_secs, 120);
         assert_eq!(s.focus.focus_min, 1);
         assert_eq!(s.focus.short_break_min, 60);
         assert_eq!(s.focus.rounds_before_long, 2);

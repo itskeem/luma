@@ -40,6 +40,7 @@ export const NoteIcon = () => (
     <circle cx="16.5" cy="16" r="2.5" />
   </Svg>
 );
+export const MusicIcon = NoteIcon;
 export const TimerIcon = () => (
   <Svg {...stroke}>
     <circle cx="12" cy="13" r="7.5" />

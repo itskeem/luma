@@ -62,6 +62,7 @@ export type Density = "comfortable" | "compact";
 export type Animation = "off" | "subtle" | "full";
 export type PositionPreset = "top-center" | "top-left" | "top-right" | "custom";
 export type IdleBehavior = "off" | "dim" | "hide";
+export type ClockFormat = "24h" | "12h";
 
 export interface FocusSettings {
   focusMin: number;
@@ -84,6 +85,9 @@ export interface Settings {
   idle: IdleBehavior;
   launchAtStartup: boolean;
   focus: FocusSettings;
+  clockFormat: ClockFormat;
+  showSeconds: boolean;
+  pauseDelaySecs: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -99,4 +103,7 @@ export const DEFAULT_SETTINGS: Settings = {
   idle: "dim",
   launchAtStartup: false,
   focus: { focusMin: 25, shortBreakMin: 5, longBreakMin: 15, roundsBeforeLong: 4, autoStartNext: false },
+  clockFormat: "24h",
+  showSeconds: false,
+  pauseDelaySecs: 8,
 };

@@ -12,6 +12,24 @@ test("collapsed is a small pill, wider with media or a visible timer", () => {
   assert.equal(media.h, 38);
 });
 
+test("clock is an elegant island with time and date, larger than the music pill", () => {
+  const clock = islandSize({ ...base, view: "clock" });
+  const pill = islandSize({ ...base, view: "collapsed" });
+  assert.ok(clock.h > pill.h);
+  assert.equal(clock.h, 60);
+  assert.equal(clock.w, 208);
+
+  const withSeconds = islandSize({ ...base, view: "clock", showSeconds: true });
+  assert.ok(withSeconds.w > clock.w);
+
+  const withTimer = islandSize({ ...base, view: "clock", timerInPill: true });
+  assert.ok(withTimer.w > clock.w);
+
+  const compactClock = islandSize({ ...base, view: "clock", density: "compact" });
+  assert.equal(compactClock.h, 52);
+  assert.ok(compactClock.w < clock.w);
+});
+
 test("every expanded view is larger than the pill, and compact is smaller than comfortable", () => {
   for (const view of ["music", "tools", "settings"] as const) {
     const pill = islandSize({ ...base, view: "collapsed" });
@@ -35,8 +53,11 @@ test("the window is the island plus the shadow margin on each side", () => {
 
 test("expanded views are identified", () => {
   assert.equal(isExpanded("music"), true);
+  assert.equal(isExpanded("tools"), true);
+  assert.equal(isExpanded("settings"), true);
   assert.equal(isExpanded("peek"), false);
   assert.equal(isExpanded("collapsed"), false);
+  assert.equal(isExpanded("clock"), false);
 });
 
 test("the music view is a short card when there is nothing to show", () => {
