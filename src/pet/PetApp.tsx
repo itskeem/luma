@@ -2,246 +2,266 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { inTauri } from "../lib/backend.ts";
 import type { Backend, FocusStatePayload } from "../lib/backend.ts";
+import type { Mood } from "../lib/pet.ts";
+import {
+  ANNOYED_MS,
+  CELEBRATE_MS,
+  DIZZY_MS,
+  HELLO_MS,
+  PERK_MS,
+  SLEEP_AFTER_MS,
+  focusJustFinished,
+  isDoubleBlink,
+  lookVector,
+  nextBlinkDelayMs,
+  petMood,
+  pointerIsNear,
+  registerPoke,
+} from "../lib/pet.ts";
 import type { MediaState, Settings } from "../types.ts";
 import { DEFAULT_SETTINGS } from "../types.ts";
-import { petMood, SLEEP_AFTER_MS } from "../lib/pet.ts";
-import type { Mood, DanceVariant } from "../lib/pet.ts";
+import { subscribeCursor } from "./petBackend.ts";
 import { PetSprite } from "./PetSprite.tsx";
 
-/** How long the "perk" window lasts after a track change (ms). */
-const PERK_MS = 1500;
-/** How long the "celebrate" window lasts after a timer phase completes (ms). */
-const CELEBRATE_MS = 3000;
-/** How long the "happy" window lasts after a click (ms). */
-const HAPPY_MS = 1200;
-
-/** URL params for preview/shots override. */
+/** Preview / screenshot overrides: ?mood=dizzy&size=large&look=1,0 */
 const URL_PARAMS = new URLSearchParams(typeof location !== "undefined" ? location.search : "");
 const PREVIEW_MOOD = URL_PARAMS.get("mood") as Mood | null;
 const PREVIEW_SIZE = URL_PARAMS.get("size") as "small" | "medium" | "large" | null;
+const PREVIEW_LOOK = URL_PARAMS.get("look")?.split(",").map(Number) ?? null;
 
-interface PetAppProps {
-  backend: Backend;
+const SIZE_PX = { small: 56, medium: 76, large: 100 } as const;
+const ACCENT: Record<string, string> = { adaptive: "#8f7bff", luma: "#8f7bff", midnight: "#6b8bff", graphite: "#9a9fb4" };
+
+/** A flag that switches on for `ms` after `trigger()`, optionally starting on. */
+function useTimedFlag(ms: number, startOn = false): [boolean, () => void] {
+  const [on, setOn] = useState(startOn);
+  const timer = useRef<number | undefined>(undefined);
+  const trigger = useCallback(() => {
+    setOn(true);
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setOn(false), ms);
+  }, [ms]);
+  useEffect(() => {
+    if (startOn) timer.current = window.setTimeout(() => setOn(false), ms);
+    return () => window.clearTimeout(timer.current);
+  }, [ms, startOn]);
+  return [on, trigger];
 }
 
-export default function PetApp({ backend }: PetAppProps) {
+export default function PetApp({ backend }: { backend: Backend }) {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [media, setMedia] = useState<MediaState>({ available: true, error: null, active: null, players: [], pinnedId: null });
   const [focus, setFocus] = useState<FocusStatePayload>({ phase: "focus", running: false, endsAtMs: 0 });
 
-  // Transient flags
-  const [perking, setPerking] = useState(false);
-  const [celebrating, setCelebrating] = useState(false);
-  const [happy, setHappy] = useState(false);
+  // Things that happen to it, each lasting a moment.
+  const [hello, greet] = useTimedFlag(HELLO_MS, true); // it greets you as it appears
+  const [perking, perk] = useTimedFlag(PERK_MS);
+  const [celebrating, celebrate] = useTimedFlag(CELEBRATE_MS);
+  const [annoyed, annoy] = useTimedFlag(ANNOYED_MS);
+  const [dizzy, makeDizzy] = useTimedFlag(DIZZY_MS);
   const [dragging, setDragging] = useState(false);
+  const [blinking, setBlinking] = useState(false);
+  const [asleep, setAsleep] = useState(false);
+  const [docVisible, setDocVisible] = useState(!document.hidden);
 
-  // Sleep state: sleep after 30 s of music being paused/stopped
-  const [isAsleep, setIsAsleep] = useState(true);
+  const spriteRef = useRef<HTMLDivElement>(null);
+  const pointerNear = useRef(false);
+  const pokes = useRef<number[]>([]);
+  const lastTrack = useRef<string | null>(null);
+  const lastFocus = useRef<FocusStatePayload | null>(null);
   const sleepTimer = useRef<number | undefined>(undefined);
 
-  // Pointer position for eye tracking
-  const [pointerOffset, setPointerOffset] = useState<{ x: number; y: number } | null>(null);
-
-  // Refs to avoid stale closures in timers
-  const prevTrackKeyRef = useRef<string | null>(null);
-  const prevFocusPhaseRef = useRef<string | null>(null);
-  const prevFocusRunningRef = useRef(false);
-  const perkTimer = useRef<number | undefined>(undefined);
-  const celebrateTimer = useRef<number | undefined>(undefined);
-  const happyTimer = useRef<number | undefined>(undefined);
-
-  // Track key for perk detection and dance variant
   const active = media.active;
-  const trackKey = active ? `${active.track.title}|${active.track.artist}` : "";
   const playing = active?.status === "playing";
-  const hasMedia = active !== null;
+  const trackKey = active ? `${active.track.title}|${active.track.artist}` : "";
 
-  // Load initial state on mount
+  // ── Sleep: after two quiet minutes with the pointer away; anything at all wakes it ──
+  const armSleep = useCallback(() => {
+    window.clearTimeout(sleepTimer.current);
+    const check = () => {
+      if (pointerNear.current) sleepTimer.current = window.setTimeout(check, 10_000);
+      else setAsleep(true);
+    };
+    sleepTimer.current = window.setTimeout(check, SLEEP_AFTER_MS);
+  }, []);
+  const wake = useCallback(() => {
+    setAsleep(false);
+    armSleep();
+  }, [armSleep]);
+  useEffect(() => {
+    armSleep();
+    return () => window.clearTimeout(sleepTimer.current);
+  }, [armSleep]);
+
+  // ── State from the app ──
   useEffect(() => {
     let alive = true;
-    void Promise.all([
-      backend.getSettings(),
-      backend.getMediaState(),
-      backend.getFocusState(),
-    ]).then(([s, m, f]) => {
+    const off: (() => void)[] = [];
+    void Promise.all([backend.getSettings(), backend.getMediaState(), backend.getFocusState()]).then(([s, m, f]) => {
       if (!alive) return;
       setSettings(s);
       setMedia(m);
       setFocus(f);
-      if (m.active?.status === "playing") {
-        setIsAsleep(false);
-      }
+      lastFocus.current = f;
+      lastTrack.current = m.active ? `${m.active.track.title}|${m.active.track.artist}` : null;
     });
-    return () => { alive = false; };
-  }, [backend]);
-
-  // Subscribe to all events
-  useEffect(() => {
-    const off: (() => void)[] = [];
-    let alive = true;
-    const setup = async () => {
-      off.push(await backend.onSettings((s) => { if (alive) setSettings(s); }));
-      off.push(await backend.onMediaState((m) => {
-        if (alive) {
+    void (async () => {
+      const subs = [
+        await backend.onSettings((s) => alive && setSettings(s)),
+        await backend.onMediaState((m) => {
+          if (!alive) return;
           setMedia(m);
-          if (m.active?.status === "playing") {
-            setIsAsleep(false);
-          }
-        }
-      }));
-      off.push(await backend.onFocusState((f) => { if (alive) setFocus(f); }));
+          wake();
+          const key = m.active ? `${m.active.track.title}|${m.active.track.artist}` : null;
+          // A new song while one was already going: look up.
+          if (m.active?.status === "playing" && lastTrack.current && key && key !== lastTrack.current) perk();
+          lastTrack.current = key;
+        }),
+        await backend.onFocusState((f) => {
+          if (!alive) return;
+          setFocus(f);
+          wake();
+          if (focusJustFinished(lastFocus.current, f, Date.now())) celebrate();
+          lastFocus.current = f;
+        }),
+      ];
+      if (alive) off.push(...subs);
+      else subs.forEach((u) => u());
+    })();
+    return () => {
+      alive = false;
+      off.forEach((u) => u());
     };
-    void setup();
-    return () => { alive = false; off.forEach((u) => u()); };
-  }, [backend]);
+  }, [backend, wake, perk, celebrate]);
 
-  // Enter sleep mood after 30 seconds of stopped/paused playback
+  // ── Eyes follow the pointer, wherever it is ──
+  const aim = useCallback((dx: number, dy: number) => {
+    pointerNear.current = pointerIsNear(dx, dy);
+    const el = spriteRef.current;
+    if (!el) return;
+    const v = lookVector(dx, dy);
+    el.style.setProperty("--lx", v.x.toFixed(3));
+    el.style.setProperty("--ly", v.y.toFixed(3));
+  }, []);
   useEffect(() => {
-    if (!playing && hasMedia) {
-      window.clearTimeout(sleepTimer.current);
-      sleepTimer.current = window.setTimeout(() => {
-        setIsAsleep(true);
-      }, SLEEP_AFTER_MS);
-      return () => window.clearTimeout(sleepTimer.current);
+    if (PREVIEW_LOOK && PREVIEW_LOOK.length === 2) {
+      aim(PREVIEW_LOOK[0] ?? 0, PREVIEW_LOOK[1] ?? 0);
+      return;
     }
-  }, [playing, hasMedia]);
+    let off: (() => void) | undefined;
+    let alive = true;
+    void subscribeCursor(aim).then((u) => {
+      if (alive) off = u;
+      else u();
+    });
+    return () => {
+      alive = false;
+      off?.();
+    };
+  }, [aim]);
 
-  // Perk detection: track change while playing
+  // ── Blinking: irregular, sometimes twice in a row ──
   useEffect(() => {
-    if (!trackKey || !playing) { prevTrackKeyRef.current = trackKey; return; }
-    if (prevTrackKeyRef.current !== null && prevTrackKeyRef.current !== trackKey) {
-      setPerking(true);
-      window.clearTimeout(perkTimer.current);
-      perkTimer.current = window.setTimeout(() => setPerking(false), PERK_MS);
-    }
-    prevTrackKeyRef.current = trackKey;
-  }, [trackKey, playing]);
-
-  // Celebrate detection: focus timer just finished a phase
-  useEffect(() => {
-    const wasRunning = prevFocusRunningRef.current;
-    const wasPhase = prevFocusPhaseRef.current;
-    prevFocusRunningRef.current = focus.running;
-    prevFocusPhaseRef.current = focus.phase;
-    // Phase transition (was running, now not running, or phase changed while running)
-    if (wasRunning && !focus.running && wasPhase !== null) {
-      setCelebrating(true);
-      window.clearTimeout(celebrateTimer.current);
-      celebrateTimer.current = window.setTimeout(() => setCelebrating(false), CELEBRATE_MS);
-    }
-  }, [focus.running, focus.phase]);
-
-  // Stop all animation when document is hidden
-  const [docVisible, setDocVisible] = useState(!document.hidden);
-  useEffect(() => {
-    const handler = () => setDocVisible(!document.hidden);
-    document.addEventListener("visibilitychange", handler);
-    return () => document.removeEventListener("visibilitychange", handler);
+    const timers = new Set<number>();
+    const later = (fn: () => void, ms: number) => {
+      const id = window.setTimeout(() => {
+        timers.delete(id);
+        fn();
+      }, ms);
+      timers.add(id);
+    };
+    const loop = () =>
+      later(() => {
+        setBlinking(true);
+        later(() => setBlinking(false), 130);
+        if (isDoubleBlink(Math.random())) {
+          later(() => setBlinking(true), 260);
+          later(() => setBlinking(false), 390);
+        }
+        loop();
+      }, nextBlinkDelayMs(Math.random()));
+    loop();
+    return () => timers.forEach((id) => window.clearTimeout(id));
   }, []);
 
-  const focusPhase = focus.phase === "focus";
-  const breakPhase = focus.phase === "short" || focus.phase === "long";
+  // ── Appearing again after being hidden: pop out and say hello ──
+  useEffect(() => {
+    const onVis = () => {
+      setDocVisible(!document.hidden);
+      document.documentElement.toggleAttribute("data-hidden", document.hidden);
+      if (!document.hidden) greet();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [greet]);
+
+  // ── Poke or drag ──
+  const press = useRef<{ x: number; y: number } | null>(null);
+  const onDown = (e: React.PointerEvent) => {
+    if (e.button === 0) press.current = { x: e.clientX, y: e.clientY };
+  };
+  const onMove = (e: React.PointerEvent) => {
+    // The first movement after a drag ends: the pet was put down.
+    if (dragging && e.buttons === 0) setDragging(false);
+    const p = press.current;
+    if (!p) return;
+    if (e.buttons !== 1) {
+      press.current = null;
+      return;
+    }
+    if (Math.hypot(e.clientX - p.x, e.clientY - p.y) > 5) {
+      press.current = null;
+      wake();
+      setDragging(true);
+      if (inTauri) void getCurrentWindow().startDragging();
+      else window.setTimeout(() => setDragging(false), 1500);
+    }
+  };
+  const onUp = () => {
+    if (!press.current) return;
+    press.current = null;
+    wake();
+    const r = registerPoke(pokes.current, Date.now());
+    pokes.current = r.history;
+    if (r.dizzy) makeDizzy();
+    else annoy();
+  };
 
   const { mood, variant, energy } = petMood({
-    hasMedia,
-    playing: hasMedia && playing,
-    msSinceStopped: hasMedia && !isAsleep ? 0 : SLEEP_AFTER_MS,
-    focusPhase,
-    breakPhase,
+    playing,
+    focusPhase: focus.phase === "focus",
+    breakPhase: focus.phase === "short" || focus.phase === "long",
     focusRunning: focus.running,
     celebrating,
     perking,
-    happy,
+    hello,
+    annoyed,
+    dizzy,
     dragging,
+    asleep,
     trackKey,
     reactsToMusic: settings.pet.reactsToMusic,
     reactsToFocus: settings.pet.reactsToFocus,
-    energy: 1.0, // seam for future audio-reactive source
+    energy: 1, // seam for a future audio-reactive source
   });
-
-  // Mood derived from current state
-  const effectiveMood: Mood = mood;
-
-  // Preview / shots.py: override mood and size from URL params.
-  const renderedMood: Mood = PREVIEW_MOOD ?? effectiveMood;
-  const sizePx = (PREVIEW_SIZE ?? settings.pet.size) === "small" ? 72 : (PREVIEW_SIZE ?? settings.pet.size) === "large" ? 128 : 96;
-  const accentHex = settings.theme === "adaptive"
-    ? "#8f7bff"
-    : settings.theme === "midnight" ? "#6b7aff"
-    : settings.theme === "graphite" ? "#aaaacc"
-    : "#8f7bff";
-
-  // Click → happy
-  const handleClick = useCallback(() => {
-    setHappy(true);
-    window.clearTimeout(happyTimer.current);
-    happyTimer.current = window.setTimeout(() => setHappy(false), HAPPY_MS);
-  }, []);
-
-  // Drag via Tauri native drag (drag-vs-click pattern matching useDragOrClick)
-  const dragStart = useRef<{ x: number; y: number } | null>(null);
-
-  const handlePointerDown = (e: React.PointerEvent) => {
-    if (e.button === 0) dragStart.current = { x: e.clientX, y: e.clientY };
-  };
-  const handlePointerMove = (e: React.PointerEvent) => {
-    const s = dragStart.current;
-    if (!s || e.buttons !== 1) { dragStart.current = null; return; }
-    if (Math.hypot(e.clientX - s.x, e.clientY - s.y) > 5) {
-      dragStart.current = null;
-      setDragging(true);
-      if (inTauri) {
-        void getCurrentWindow().startDragging().finally(() => setDragging(false));
-      } else {
-        setDragging(false);
-      }
-    }
-  };
-  const handlePointerUp = () => {
-    if (dragStart.current) handleClick();
-    dragStart.current = null;
-  };
-
-  // Eye tracking: pointer inside the pet window only
-  const stageRef = useRef<HTMLDivElement>(null);
-  const handlePointerEnter = (e: React.PointerEvent) => {
-    const r = stageRef.current?.getBoundingClientRect();
-    if (!r) return;
-    setPointerOffset({ x: e.clientX - (r.left + r.width / 2), y: e.clientY - (r.top + r.height / 2) });
-  };
-  const handlePointerMoveStage = (e: React.PointerEvent) => {
-    const r = stageRef.current?.getBoundingClientRect();
-    if (!r) return;
-    setPointerOffset({ x: e.clientX - (r.left + r.width / 2), y: e.clientY - (r.top + r.height / 2) });
-  };
-  const handlePointerLeave = () => setPointerOffset(null);
 
   if (!settings.pet.enabled && !PREVIEW_MOOD) return null;
 
+  const size = SIZE_PX[PREVIEW_SIZE ?? settings.pet.size];
   return (
-    <div
-      ref={stageRef}
-      className="pet-stage"
-      onPointerEnter={handlePointerEnter}
-      onPointerMove={handlePointerMoveStage}
-      onPointerLeave={handlePointerLeave}
-    >
-      <div
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={() => { dragStart.current = null; }}
-      >
+    <div className="pet-stage" onContextMenu={(e) => e.preventDefault()}>
+      <div onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={() => (press.current = null)}>
         <PetSprite
-          mood={renderedMood}
-          variant={variant as DanceVariant}
-          energy={energy}
-          accentHex={accentHex}
-          size={sizePx}
-          pointerOffset={pointerOffset}
-          animation={!docVisible ? "off" : settings.animation}
+          mood={PREVIEW_MOOD ?? mood}
+          variant={variant}
+          accentHex={ACCENT[settings.theme] ?? "#8f7bff"}
+          size={size}
+          animation={docVisible ? settings.animation : "off"}
+          blinking={blinking}
+          rootRef={spriteRef}
         />
       </div>
+      <span hidden data-energy={energy} />
     </div>
   );
 }

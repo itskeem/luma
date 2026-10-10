@@ -34,23 +34,26 @@ Everything below needs a real Windows desktop. Tick these off after `npm run tau
 - [ ] Starting a second copy brings the first one back instead of opening another
 - [ ] Idle CPU ≈ 0 % with nothing playing; < 1–2 % while playing (Task Manager → WebView2 processes)
 
-## Desktop Pet (⚠ UNVERIFIED — needs Windows)
-These items require a real Windows desktop and are **not** covered by automated checks.
+## Desktop pet (needs Windows)
+- [ ] First launch: the pet appears (bottom-right of the work area) and waves hello; no taskbar button, not in Alt-Tab
+- [ ] Clicking it while typing in another app does **not** take keyboard focus
+- [ ] Its eyes follow the pointer **across the whole screen**, not just over the pet; they stop following while it sleeps
+- [ ] One click: annoyed (brows, small shake). Three clicks inside ~1.7 s: dizzy (spiral eyes, wobble)
+- [ ] Play music: it dances; pause: the dance fades out over about half a second
+- [ ] Change song while playing: it perks up briefly
+- [ ] Start a focus session: it concentrates; let it finish: it cheers. Pausing or skipping the timer must **not** make it cheer
+- [ ] Leave everything idle for two minutes with the pointer away: it falls asleep; moving the mouse near it or any media/timer change wakes it
+- [ ] Drag it: dangles while carried, saves its position, same spot after restart; recovers if its monitor is unplugged
+- [ ] Tray → Show / hide pet works **even when the pet was off in Settings** (it turns it on), and the Settings toggle agrees
+- [ ] Settings → Pet size: the visible pet resizes immediately (small/medium/large are 56/76/100 px)
+- [ ] 125 / 150 / 200 % scaling and mixed-DPI monitors: correct size and position
+- [ ] Idle CPU of the pet window stays near 0 % (the pointer feed sends only when the pointer moves)
 
-- [ ] Enable the pet in Settings → Pet → Show pet; it appears in the bottom-right of the work area
-- [ ] Pet window has no taskbar button and is not in Alt-Tab
-- [ ] Clicking the pet while typing in another app does **not** steal keyboard focus
-- [ ] Click pet: happy squish animation; no media command is sent
-- [ ] Drag pet: moves smoothly; position is saved; survives restart
-- [ ] Pet never hides under the taskbar (48 px bottom margin fallback; verify with both top and bottom taskbar positions)
-- [ ] **Multi-monitor**: drag pet to a secondary monitor; position is remembered per monitor; unplug the monitor → pet moves to primary
-- [ ] **DPI**: at 125 %/150 %/200 % scaling the pet is correctly sized and positioned; drag between monitors of different DPI
-- [ ] **Mood transitions**: play music → pet grooves; pause → goes idle after a few seconds; stop and wait 30 s → pet sleeps; start focus timer → calm focused pose; timer ends → celebrate hop; track changes → brief perk snap
-- [ ] **Four dance variants**: different songs visually bob/sway/bounce differently; same song always uses the same variant
-- [ ] **Animation off**: static poses with no movement; cross-fades still work
-- [ ] **Tray toggle**: "Show/hide pet" from tray shows or hides without quitting the app
-- [ ] **Settings pet section**: size toggle (Small/Medium/Large) resizes the window; disable re-hides the pet
-- [ ] **CPU – sleeping**: with no player running and no music, pet CPU ≈ 0 % (no timers firing)
-- [ ] **CPU – grooving**: while music plays, pet CPU < 1 % (CSS animation, no JS loop)
-- [ ] **Fullscreen apps**: pet behaviour is acceptable under exclusive-fullscreen apps (known limit: may be covered)
-- [ ] Quit Luma: both the island and the pet window close; no leftover WebView2 process
+## Island: covers, hover, size (needs Windows)
+- [ ] Album art appears for **every** source you use: Spotify, YouTube Music, plain YouTube, Apple Music, a local player. If one still shows none, note which app and whether its title shows
+- [ ] Skipping tracks quickly never shows the previous song's cover against the new title
+- [ ] A track whose cover arrives late (browsers) gets it within a few seconds without touching anything
+- [ ] Hover over the pill: it opens after a beat. Move away: it folds about a third of a second later
+- [ ] Fold it with the chevron while the pointer is still over it: it stays folded until you leave and come back
+- [ ] Tray → Settings… opens Settings and it does **not** vanish before you reach it
+- [ ] Overall size feels right at 100 % and 150 % scaling (the island is drawn at 90 % of its design size)

@@ -67,6 +67,7 @@ pub fn run() {
                 platform::make_non_activating(&pet_win);
             }
             pet_window::refresh_visibility(app.handle());
+            pet_window::start_cursor_feed(app.handle().clone());
 
             // Started last, so its first state finds everything it needs.
             let handle = app.handle().clone();

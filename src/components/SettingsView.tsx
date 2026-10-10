@@ -127,10 +127,10 @@ export function SettingsView({ api, go }: { api: SettingsApi; go: (v: BaseView) 
         </Section>
 
         <Section title="Behavior">
-          <Row label="Open on hover">
+          <Row label="Open on hover" hint="Opens when you point at it, folds when you leave">
             <Toggle label="Open on hover" checked={s.openOnHover} onChange={(openOnHover) => update({ openOnHover })} />
           </Row>
-          <Row label="Fold after" hint="Once the pointer has left">
+          <Row label="Fold after" hint="When not using hover (instant with hover)">
             <Segmented<number> label="Fold after" value={s.autoCollapseSecs} onChange={(autoCollapseSecs) => update({ autoCollapseSecs })} options={[{ value: 0, label: "Never" }, { value: 5, label: "5 s" }, { value: 8, label: "8 s" }, { value: 20, label: "20 s" }]} />
           </Row>
           <Row label="Show track changes" hint="A brief peek when the song changes">

@@ -39,7 +39,12 @@ const COALESCE: Duration = Duration::from_millis(60);
 /// Never refresh more often than this, whatever a chatty player sends.
 const MIN_REFRESH_GAP: Duration = Duration::from_millis(200);
 /// Artwork larger than this is ignored rather than shipped over IPC.
-const MAX_ART_BYTES: u64 = 4 * 1024 * 1024;
+const MAX_ART_BYTES: u64 = 8 * 1024 * 1024;
+/// How much of an image stream is pulled in per read.
+const ART_CHUNK: usize = 256 * 1024;
+/// When a track has a title but no cover yet (browsers often publish the image a moment
+/// after the text), look again after these delays instead of waiting for the heartbeat.
+const ART_RETRY_MS: [u64; 5] = [300, 800, 1800, 3500, 6000];
 
 enum Msg {
     Wake,
@@ -130,6 +135,10 @@ struct Worker {
     art_by_key: HashMap<String, String>,
     /// session → (track key, artwork id) of the previous read, to spot stale art.
     art_last: HashMap<String, (String, String)>,
+    /// Which track the cover retries are for, how many have been spent, and when the next is due.
+    art_retry_key: Option<String>,
+    art_retries: usize,
+    retry_at: Option<Instant>,
 }
 
 fn now_ms() -> u64 {
@@ -154,6 +163,9 @@ fn run(rx: Receiver<Msg>, tx: Sender<Msg>, on_state: Box<dyn Fn(MediaState) + Se
         last: None,
         art_by_key: HashMap::new(),
         art_last: HashMap::new(),
+        art_retry_key: None,
+        art_retries: 0,
+        retry_at: None,
     };
     let mut last_refresh = Instant::now() - MIN_REFRESH_GAP;
 
@@ -171,7 +183,8 @@ fn run(rx: Receiver<Msg>, tx: Sender<Msg>, on_state: Box<dyn Fn(MediaState) + Se
             last_refresh = Instant::now();
         }
 
-        let first = rx.recv_timeout(HEARTBEAT);
+        let wait = w.retry_at.map_or(HEARTBEAT, |t| HEARTBEAT.min(t.saturating_duration_since(Instant::now())));
+        let first = rx.recv_timeout(wait);
         match first {
             Err(RecvTimeoutError::Disconnected) => break,
             Err(RecvTimeoutError::Timeout) => {}
@@ -243,6 +256,33 @@ impl Worker {
         }
     }
 
+    /// A track with a title but no cover usually just hasn't delivered it yet: ask again soon,
+    /// a few times, then leave it to the heartbeat.
+    fn schedule_cover_retry(&mut self, state: &MediaState) {
+        let waiting = state
+            .active
+            .as_ref()
+            .filter(|a| !a.track.title.is_empty() && a.track.artwork_id.is_none())
+            .map(|a| format!("{}|{}|{}", a.id, a.track.title, a.track.artist));
+        match waiting {
+            Some(key) => {
+                if self.art_retry_key.as_ref() != Some(&key) {
+                    self.art_retry_key = Some(key);
+                    self.art_retries = 0;
+                }
+                self.retry_at = ART_RETRY_MS
+                    .get(self.art_retries)
+                    .map(|ms| Instant::now() + Duration::from_millis(*ms));
+                self.art_retries += 1;
+            }
+            None => {
+                self.art_retry_key = None;
+                self.art_retries = 0;
+                self.retry_at = None;
+            }
+        }
+    }
+
     fn publish(&mut self, state: MediaState) {
         let changed = self.last.as_ref().map_or(true, |old| materially_differs(old, &state));
         if changed {
@@ -287,6 +327,7 @@ impl Worker {
         }
         self.activity.observe(&snaps, now);
         let state = build_state(&snaps, self.pinned.as_deref(), &self.activity);
+        self.schedule_cover_retry(&state);
         self.publish(state);
     }
 
@@ -417,18 +458,40 @@ impl Worker {
 fn read_thumbnail(props: &MediaProps) -> Option<Vec<u8>> {
     let reference = props.Thumbnail().ok()?;
     let stream = reference.OpenReadAsync().ok()?.get().ok()?;
-    let size = stream.Size().ok()?;
-    if size == 0 || size > MAX_ART_BYTES {
+    // Some players report a size of 0 for a stream that still holds the image, so a
+    // missing size means "read until it ends", not "no image".
+    let declared = stream.Size().unwrap_or(0);
+    if declared > MAX_ART_BYTES {
         return None;
     }
     let input: IInputStream = stream.cast().ok()?;
     let reader = DataReader::CreateDataReader(&input).ok()?;
-    let loaded = reader.LoadAsync(size as u32).ok()?.get().ok()?;
-    let mut buf = vec![0u8; loaded as usize];
-    reader.ReadBytes(&mut buf).ok()?;
-    if buf.is_empty() {
+
+    let mut out: Vec<u8> = Vec::with_capacity(declared as usize);
+    loop {
+        let want = if declared > 0 { (declared as usize).saturating_sub(out.len()).min(ART_CHUNK) } else { ART_CHUNK };
+        if want == 0 {
+            break;
+        }
+        let got = match reader.LoadAsync(want as u32).and_then(|op| op.get()) {
+            Ok(n) => n as usize,
+            Err(_) => break, // keep what arrived; a truncated image beats none only if it decodes, the UI checks
+        };
+        if got == 0 {
+            break;
+        }
+        let mut chunk = vec![0u8; got];
+        if reader.ReadBytes(&mut chunk).is_err() {
+            break;
+        }
+        out.extend_from_slice(&chunk);
+        if out.len() as u64 > MAX_ART_BYTES {
+            return None;
+        }
+    }
+    if out.is_empty() {
         None
     } else {
-        Some(buf)
+        Some(out)
     }
 }

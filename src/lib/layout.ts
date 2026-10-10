@@ -4,6 +4,12 @@
 import type { Density } from "../types.ts";
 
 export const PAD = 14;
+/**
+ * The whole island is drawn at this fraction of its design size. The views are laid
+ * out at their design size and scaled as one (see .scaler in island.css), so the
+ * window, the island and the content can never disagree.
+ */
+export const UI_SCALE = 0.9;
 /** Matches --dur in tokens.css. */
 export const TRANSITION_MS = 380;
 
@@ -26,7 +32,14 @@ export interface LayoutInput {
   showSeconds?: boolean;
 }
 
-export function islandSize({ view, density, hasMedia, multiPlayer, timerInPill, showSeconds = false }: LayoutInput): Size {
+/** Size on screen: the design size times UI_SCALE. */
+export function islandSize(input: LayoutInput): Size {
+  const d = designSize(input);
+  return { w: Math.round(d.w * UI_SCALE), h: Math.round(d.h * UI_SCALE) };
+}
+
+/** Size the views are laid out at, before scaling. */
+export function designSize({ view, density, hasMedia, multiPlayer, timerInPill, showSeconds = false }: LayoutInput): Size {
   const compact = density === "compact";
   switch (view) {
     case "clock":

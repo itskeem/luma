@@ -46,6 +46,9 @@ pub fn sniff_mime(bytes: &[u8]) -> &'static str {
         [b'G', b'I', b'F', b'8', ..] => "image/gif",
         [b'B', b'M', ..] => "image/bmp",
         [b'R', b'I', b'F', b'F', _, _, _, _, b'W', b'E', b'B', b'P', ..] => "image/webp",
+        [_, _, _, _, b'f', b't', b'y', b'p', b'a', b'v', b'i', b'f', ..] => "image/avif",
+        [0, 0, 1, 0, ..] => "image/x-icon",
+        [b'<', ..] => "image/svg+xml",
         _ => "image/jpeg",
     }
 }
@@ -91,6 +94,8 @@ mod tests {
         assert_eq!(sniff_mime(&[0x89, b'P', b'N', b'G', 0, 0]), "image/png");
         assert_eq!(sniff_mime(&[0xFF, 0xD8, 0xFF, 0xE0]), "image/jpeg");
         assert_eq!(sniff_mime(b"RIFF\0\0\0\0WEBPVP8 "), "image/webp");
+        assert_eq!(sniff_mime(b"\0\0\0\x1cftypavif"), "image/avif");
+        assert_eq!(sniff_mime(b"<svg xmlns"), "image/svg+xml");
         assert_eq!(sniff_mime(b""), "image/jpeg");
         assert!(data_url(&[0xFF, 0xD8, 0xFF]).starts_with("data:image/jpeg;base64,"));
     }

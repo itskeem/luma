@@ -101,13 +101,13 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  version: 1,
+  version: 3,
   theme: "adaptive",
   density: "comfortable",
   animation: "full",
   position: "top-center",
   customAnchor: null,
-  openOnHover: false,
+  openOnHover: true,
   autoCollapseSecs: 8,
   peekOnTrackChange: true,
   idle: "dim",
@@ -116,6 +116,6 @@ export const DEFAULT_SETTINGS: Settings = {
   clockFormat: "24h",
   showSeconds: false,
   pauseDelaySecs: 8,
-  pet: { enabled: false, size: "medium", reactsToMusic: true, reactsToFocus: true, customAnchor: null },
+  pet: { enabled: true, size: "medium", reactsToMusic: true, reactsToFocus: true, customAnchor: null },
 };
 

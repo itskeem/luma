@@ -6,7 +6,9 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-pub const SETTINGS_VERSION: u32 = 1;
+/// 2: the desktop pet is on by default. 3: the island opens on hover by default.
+/// Files from older versions are migrated once, see `load`.
+pub const SETTINGS_VERSION: u32 = 3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
@@ -105,21 +107,21 @@ fn default_pause_delay() -> u32 {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum PetSize {
-    /// 72 logical px sprite
+    /// 56 logical px sprite
     Small,
-    /// 96 logical px sprite
+    /// 76 logical px sprite
     #[default]
     Medium,
-    /// 128 logical px sprite
+    /// 100 logical px sprite
     Large,
 }
 
 impl PetSize {
     pub fn logical_px(self) -> u32 {
         match self {
-            PetSize::Small => 72,
-            PetSize::Medium => 96,
-            PetSize::Large => 128,
+            PetSize::Small => 56,
+            PetSize::Medium => 76,
+            PetSize::Large => 100,
         }
     }
 }
@@ -138,7 +140,7 @@ pub struct PetSettings {
 impl Default for PetSettings {
     fn default() -> Self {
         Self {
-            enabled: false,
+            enabled: true,
             size: PetSize::default(),
             reacts_to_music: true,
             reacts_to_focus: true,
@@ -184,7 +186,7 @@ impl Default for Settings {
             animation: Animation::default(),
             position: Position::default(),
             custom_anchor: None,
-            open_on_hover: false,
+            open_on_hover: true,
             auto_collapse_secs: 8,
             peek_on_track_change: true,
             idle: IdleBehavior::default(),
@@ -243,6 +245,14 @@ pub fn load(path: &Path) -> (Settings, LoadOutcome) {
     };
     match serde_json::from_str::<Settings>(&text) {
         Ok(mut s) => {
+            // Version 1 shipped with the pet off, so a saved `false` there was never a choice.
+            if s.version < 2 {
+                s.pet.enabled = true;
+            }
+            // Version 2 and earlier had hover-open off; it was never offered as the default.
+            if s.version < 3 {
+                s.open_on_hover = true;
+            }
             s.sanitize();
             (s, LoadOutcome::Loaded)
         }
@@ -290,7 +300,7 @@ mod tests {
         assert_eq!(s.clock_format, ClockFormat::H24);
         assert!(!s.show_seconds);
         assert_eq!(s.pause_delay_secs, 8);
-        assert!(!s.pet.enabled);
+        assert!(s.pet.enabled);
         assert_eq!(s.pet.size, PetSize::Medium);
         assert!(s.pet.reacts_to_music);
         assert!(s.pet.reacts_to_focus);
@@ -354,7 +364,7 @@ mod tests {
         assert!(!s.show_seconds);
         assert_eq!(s.pause_delay_secs, 8);
         // Old file had no pet field: defaults must apply.
-        assert!(!s.pet.enabled);
+        assert!(s.pet.enabled);
         assert_eq!(s.pet.size, PetSize::Medium);
     }
 
@@ -410,5 +420,39 @@ mod tests {
         s.sanitize();
         assert!(s.custom_anchor.is_none());
         assert_eq!(s.position, Position::TopCenter);
+    }
+
+    #[test]
+    fn version_1_files_get_the_pet_switched_on_once() {
+        let path = temp_path("migrate");
+        fs::write(&path, r#"{"version":1,"pet":{"enabled":false,"size":"large"}}"#).unwrap();
+        let (s, outcome) = load(&path);
+        assert_eq!(outcome, LoadOutcome::Loaded);
+        assert!(s.pet.enabled, "v1 default was off, so it is turned on");
+        assert_eq!(s.pet.size, PetSize::Large, "other pet choices are kept");
+        assert_eq!(s.version, SETTINGS_VERSION);
+        // From the current version on, switching it off is the user's decision and sticks.
+        save(&path, &Settings { pet: PetSettings { enabled: false, ..s.pet.clone() }, ..s }).unwrap();
+        let (again, _) = load(&path);
+        assert!(!again.pet.enabled);
+    }
+
+    #[test]
+    fn older_files_get_hover_open_switched_on_once_and_it_then_sticks() {
+        let path = temp_path("migrate-hover");
+        fs::write(&path, r#"{"version":2,"openOnHover":false,"theme":"luma"}"#).unwrap();
+        let (s, _) = load(&path);
+        assert!(s.open_on_hover);
+        assert_eq!(s.theme, Theme::Luma, "nothing else is touched");
+        save(&path, &Settings { open_on_hover: false, ..s }).unwrap();
+        let (again, _) = load(&path);
+        assert!(!again.open_on_hover, "a choice made at the current version is kept");
+    }
+
+    #[test]
+    fn the_pet_sprites_are_modest() {
+        assert_eq!(PetSize::Small.logical_px(), 56);
+        assert_eq!(PetSize::Medium.logical_px(), 76);
+        assert_eq!(PetSize::Large.logical_px(), 100);
     }
 }

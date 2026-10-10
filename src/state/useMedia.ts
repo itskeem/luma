@@ -18,7 +18,7 @@ export function useMedia(): MediaView {
   const backend = useBackend();
   const [state, setState] = useState<MediaState>(EMPTY);
   const [ready, setReady] = useState(false);
-  const [art, setArt] = useState<{ id: string; url: string } | null>(null);
+  const [art, setArt] = useState<{ id: string; url: string | null } | null>(null);
   const [accentFor, setAccentFor] = useState<{ url: string; accent: Accent | null } | null>(null);
 
   useEffect(() => {
@@ -49,15 +49,16 @@ export function useMedia(): MediaView {
     if (!artworkId) return;
     let dead = false;
     void backend.getArtwork(artworkId).then((url) => {
-      if (!dead && url) setArt({ id: artworkId, url });
+      if (!dead) setArt({ id: artworkId, url });
     });
     return () => {
       dead = true;
     };
   }, [backend, artworkId]);
 
-  // While a new image loads, the previous one stays; with no artwork id there is none.
-  const artworkUrl = artworkId ? (art?.url ?? null) : null;
+  // While a new image loads, the previous one stays on screen; once it has loaded (or failed to),
+  // the track gets its own, or none: a cover is never shown against the wrong song.
+  const artworkUrl = artworkId ? (art?.id === artworkId ? art.url : (art?.url ?? null)) : null;
 
   useEffect(() => {
     if (!artworkUrl) return;

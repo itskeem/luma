@@ -11,7 +11,7 @@ complements the one you already use.
 
 ## Features (MVP)
 
-- Floating, transparent, always-on-top island that never steals keyboard focus; click or hover to expand, smooth expand/collapse
+- Floating, transparent, always-on-top island that never steals keyboard focus; opens when you point at it and folds when you move away (or click to toggle), smooth expand/collapse
 - Real system media sessions (no login, no per-service plugin): title, artist, album, artwork, progress, active-player name
 - Play/pause, previous, next, seek, enabled only where the player supports them
 - Several players: picks the right one automatically, lets you pin another
@@ -19,7 +19,7 @@ complements the one you already use.
 - Clock, date and a focus timer (Pomodoro) in a compact second view
 - Settings: theme, size, animation, home position (and drag anywhere), open on hover, idle behaviour, launch with Windows
 - Tray icon (show/hide, settings, quit), single instance, remembers position and preferences, multi-monitor and DPI aware
-- Desktop companion pet: lightweight, quiet floating orb that grooves to music, naps when idle, celebrates focus timer completions, follows cursor, and can be positioned anywhere
+- Desktop companion pet (on by default; tray or Settings → Pet to turn it off): an original Luma character, a small flat sphere wearing the logo's ribbon as an orbit. Its eyes follow the pointer anywhere on screen; poking it annoys it, and three quick pokes make it dizzy; it blinks at irregular intervals, says hello when it appears, dances at 112 BPM while music plays (fading in and out), concentrates during focus sessions, cheers when one finishes, and falls asleep after two quiet minutes. Drag it anywhere; it remembers where you left it.
 - Graceful states: paused, stopped, no player, missing metadata/artwork/timeline, media service unavailable
 
 After the MVP is solid: more focus tools, music history, custom animations. See *Roadmap*.
@@ -114,6 +114,14 @@ Built and checked in a Linux sandbox without a Windows machine:
 - transparent-window look, shadow, rounded corners, non-activating behaviour, hit-testing
 - dragging, multi-monitor/DPI in practice, tray, launch-at-startup, installer
 - CPU use while idle and while animating
+
+## About the pet
+
+The behaviours were modelled on what makes Coucou's companion feel alive, but the character is Luma's own.
+Coucou's code is MIT-licensed, while its Mochi character (design, expressions, animations, name and sounds)
+is explicitly **not** (see Coucou's `LICENSE-ASSETS.md`), so nothing of Mochi's look was reproduced.
+To change the character, edit `src/pet/PetSprite.tsx` (the drawing) and `src/pet/pet.css` (the motion);
+the behaviour rules are pure functions in `src/lib/pet.ts` with tests.
 
 ## Known limitations
 

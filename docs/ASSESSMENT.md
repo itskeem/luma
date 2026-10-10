@@ -37,3 +37,10 @@ crates/luma-core     pure Rust, unit-tested anywhere: media model + player selec
 src-tauri/           Tauri glue: window, tray, commands, startup  +  media/smtc.rs (Windows only)
 src/                 React + TypeScript UI; talks to Rust only through lib/backend.ts
 ```
+
+## Licensing note: the pet
+
+Coucou's source is MIT; its Mochi character (design, look, expressions, animations, name, icon and sounds)
+is reserved by the author (`LICENSE-ASSETS.md`). Luma's pet therefore borrows only *behaviour ideas*
+(pointer-following eyes, poke then dizzy, blinking, a greeting, a beat-locked dance, sleep) and uses an
+original character derived from Luma's own logo.

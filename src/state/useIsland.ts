@@ -8,7 +8,9 @@ export type Peek = { kind: "track" } | { kind: "message"; text: string };
 
 const PEEK_MS = 3600;
 const MESSAGE_MS = 6000;
-const HOVER_OPEN_MS = 220;
+const HOVER_OPEN_MS = 160;
+/** With open-on-hover, the island folds this long after the pointer leaves it. */
+const HOVER_CLOSE_MS = 350;
 const DIM_AFTER_MS = 10_000;
 
 interface Inputs {
@@ -44,6 +46,12 @@ export function useIsland({ settings, trackKey, playing, hasMedia, activeStatus 
   const [base, setBase] = useState<BaseView>("clock");
   const [peek, setPeek] = useState<Peek | null>(null);
   const [inside, setInside] = useState(false);
+  // True once the pointer has been over the island since it opened. Hover-close only
+  // applies after that, so a panel opened from the tray doesn't vanish before you get to it.
+  const [entered, setEntered] = useState(false);
+  // Hover may open the island only after the pointer has left since the last time you
+  // closed it by hand; otherwise folding it with the chevron would pop it straight open again.
+  const [armed, setArmed] = useState(true);
   const [dimmed, setDimmed] = useState(false);
 
   // Pause delay: stay in music pill for pauseDelaySecs when paused before returning to clock.
@@ -97,20 +105,26 @@ export function useIsland({ settings, trackKey, playing, hasMedia, activeStatus 
     return () => window.clearTimeout(id);
   }, [peek]);
 
-  // Open on hover: opens music if playing, companion tools if clock
+  // Open on hover: the player if there is one (paused or not), the companion panel if not.
   useEffect(() => {
-    if (!settings.openOnHover || !inside || isExpanded(base)) return;
-    const targetView: BaseView = playing ? "music" : "tools";
+    if (!settings.openOnHover || !inside || !armed || isExpanded(base)) return;
+    const targetView: BaseView = hasMedia ? "music" : "tools";
     const id = window.setTimeout(() => setBase(targetView), HOVER_OPEN_MS);
     return () => window.clearTimeout(id);
-  }, [settings.openOnHover, inside, base, playing]);
+  }, [settings.openOnHover, inside, armed, base, hasMedia]);
 
-  // Fold again after pointer has left
+  // Fold again once the pointer has left: right away with open-on-hover, otherwise
+  // after the "fold after" delay (0 = never).
   useEffect(() => {
-    if (!isExpanded(base) || inside || settings.autoCollapseSecs <= 0) return;
-    const id = window.setTimeout(() => setBase(collapsedFace), settings.autoCollapseSecs * 1000);
+    if (!isExpanded(base) || inside) return;
+    const delay = settings.openOnHover && entered ? HOVER_CLOSE_MS : settings.autoCollapseSecs * 1000;
+    if (delay <= 0) return;
+    const id = window.setTimeout(() => {
+      setBase(collapsedFace);
+      setEntered(false);
+    }, delay);
     return () => window.clearTimeout(id);
-  }, [base, inside, settings.autoCollapseSecs, collapsedFace]);
+  }, [base, inside, entered, settings.openOnHover, settings.autoCollapseSecs, collapsedFace]);
 
   // Dim when nothing is playing and nobody is interacting
   const wantDim = settings.idle === "dim" && !playing && !inside && !isExpanded(base) && !peek;
@@ -139,8 +153,14 @@ export function useIsland({ settings, trackKey, playing, hasMedia, activeStatus 
 
   const view: View = peek && !isExpanded(effectiveBase) ? "peek" : effectiveBase;
 
+  const foldByHand = () => {
+    setArmed(false);
+    setEntered(false);
+  };
+
   const toggleExpand = () => {
     if (isExpanded(effectiveBase)) {
+      foldByHand();
       setBase(collapsedFace);
     } else if (effectiveBase === "clock") {
       setBase("tools");
@@ -156,12 +176,22 @@ export function useIsland({ settings, trackKey, playing, hasMedia, activeStatus 
     collapsedFace,
     setBase: (v) => {
       setPeek(null);
+      if (!isExpanded(v)) foldByHand();
       setBase(v);
     },
     toggleExpand,
     showMessage: (text) => setPeek({ kind: "message", text }),
     dimmed,
-    pointer: { onPointerEnter: () => setInside(true), onPointerLeave: () => setInside(false) },
+    pointer: {
+      onPointerEnter: () => {
+        setInside(true);
+        setEntered(true);
+      },
+      onPointerLeave: () => {
+        setInside(false);
+        setArmed(true);
+      },
+    },
   };
 }
 

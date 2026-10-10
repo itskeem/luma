@@ -1,4 +1,5 @@
 import orb from "../assets/luma-orb.png";
+import { TimerIcon } from "./icons.tsx";
 import { useLiveClock } from "../lib/useLiveClock.ts";
 import type { ClockFormat } from "../types.ts";
 
@@ -40,7 +41,7 @@ export function ClockFace({ clockFormat, showSeconds, timerLabel, compact = fals
 
       {timerLabel && (
         <div className="clock-timer-chip" title="Focus session in progress">
-          <span className="chip-dot" />
+          <TimerIcon />
           <span className="chip-text">{timerLabel}</span>
         </div>
       )}

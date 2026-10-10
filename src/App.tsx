@@ -9,7 +9,7 @@ import { ToolsView } from "./components/ToolsView.tsx";
 import { useBackend } from "./lib/backend.ts";
 import { formatCompactClock } from "./lib/clock.ts";
 import { formatTime } from "./lib/format.ts";
-import { islandSize, isExpanded } from "./lib/layout.ts";
+import { islandSize, isExpanded, UI_SCALE } from "./lib/layout.ts";
 import type { Phase } from "./lib/pomodoro.ts";
 import { useLiveClock } from "./lib/useLiveClock.ts";
 import { useFocusTimer } from "./state/useFocusTimer.ts";
@@ -77,7 +77,7 @@ export default function App() {
       : undefined;
 
   const style = useMemo(
-    () => ({ width: drawn.w, height: drawn.h, ...(accent ? { "--accent": accent } : {}) }) as CSSProperties,
+    () => ({ width: drawn.w, height: drawn.h, "--ui-scale": UI_SCALE, ...(accent ? { "--accent": accent } : {}) }) as CSSProperties,
     [drawn.w, drawn.h, accent],
   );
   const align = settings.position === "top-left" ? "start" : settings.position === "top-right" ? "end" : "center";
@@ -110,6 +110,7 @@ export default function App() {
       >
         <div className="island-glow" aria-hidden="true" />
 
+        <div className="scaler">
         {/* State A: Idle Clock - Nothing Playing */}
         {island.view === "clock" && (
           <div className="face face-clock" {...dragOrClick}>
@@ -172,6 +173,7 @@ export default function App() {
             <SettingsView api={settingsApi} go={island.setBase} />
           </Face>
         )}
+        </div>
       </div>
       {backend.preview && <DevBar controls={backend.preview} />}
     </div>

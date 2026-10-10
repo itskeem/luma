@@ -1,304 +1,178 @@
-import type { CSSProperties } from "react";
-import { useMemo } from "react";
+import type { CSSProperties, Ref } from "react";
+import { useEffect, useState } from "react";
+import { rgbToHsl } from "../lib/color.ts";
 import type { DanceVariant, Mood } from "../lib/pet.ts";
+import { DANCE_FADE_OUT_MS, danceCycleSeconds, danceMoves } from "../lib/pet.ts";
 
+/**
+ * Luma's pet: a small flat sphere with the logo's ribbon wrapped round it as a thin
+ * orbit. No mouth and no decoration; it speaks entirely with its eyes and its body.
+ *
+ * Everything is drawn in a 100 × 100 box and scaled, so one drawing serves every size.
+ */
 interface PetSpriteProps {
   mood: Mood;
   variant: DanceVariant;
-  energy: number;
-  /** Accent hex colour from the island theme (e.g. "#8f7bff"). */
+  /** Theme accent, "#rrggbb". */
   accentHex: string;
-  /** Sprite diameter in CSS px. */
+  /** Sprite side in CSS px. */
   size: number;
-  /** Pointer position relative to sprite centre (null when outside window). */
-  pointerOffset: { x: number; y: number } | null;
-  /** Animation level: "off" | "subtle" | "full" */
   animation: "off" | "subtle" | "full";
+  /** A blink is in progress. */
+  blinking: boolean;
+  /** The window sets --lx / --ly on this element to aim the eyes (no React renders per pointer move). */
+  rootRef: Ref<HTMLDivElement>;
 }
 
-// ── Colour helpers ────────────────────────────────────────────────────────────
+const INK = "#1b1626";
+const LEFT = { x: 35, y: 49 };
+const RIGHT = { x: 65, y: 49 };
 
-function hexToHsl(hex: string): [number, number, number] {
-  const r = parseInt(hex.slice(1, 3), 16) / 255;
-  const g = parseInt(hex.slice(3, 5), 16) / 255;
-  const b = parseInt(hex.slice(5, 7), 16) / 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b);
-  const l = (max + min) / 2;
-  if (max === min) return [0, 0, l];
-  const d = max - min;
-  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-  let h: number;
-  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
-  else if (max === g) h = ((b - r) / d + 2) / 6;
-  else h = ((r - g) / d + 4) / 6;
-  return [h * 360, s * 100, l * 100];
+function hueOf(hex: string): number {
+  const n = parseInt(hex.slice(1), 16);
+  return rgbToHsl((n >> 16) & 255, (n >> 8) & 255, n & 255)[0];
 }
 
-// ── Eye shapes per mood ───────────────────────────────────────────────────────
+type Eyes = "open" | "wide" | "joy" | "closed" | "lidded" | "cross" | "spiral";
 
-type EyeShape = "open" | "happy" | "squint" | "sleepy" | "wide" | "star";
-
-function moodEyes(mood: Mood): EyeShape {
+function eyesFor(mood: Mood): Eyes {
   switch (mood) {
-    case "sleeping":  return "sleepy";
-    case "idle":      return "open";
-    case "grooving":  return "happy";
-    case "perk":      return "wide";
-    case "focused":   return "squint";
-    case "break":     return "happy";
-    case "celebrate": return "star";
-    case "happy":     return "star";
-    case "carried":   return "wide";
+    case "sleeping": return "closed";
+    case "grooving":
+    case "break":
+    case "celebrate": return "joy";
+    case "perk":
+    case "carried": return "wide";
+    case "focused": return "lidded";
+    case "annoyed": return "cross";
+    case "dizzy": return "spiral";
+    case "idle":
+    case "hello": return "open";
   }
 }
 
-function Eye({ shape, cx, cy, r, accentHex }: { shape: EyeShape; cx: number; cy: number; r: number; accentHex: string }) {
-  const [h] = hexToHsl(accentHex);
-  const pupilColor = `hsl(${h} 80% 25%)`;
+function spiralPath(cx: number, cy: number): string {
+  let d = "";
+  for (let i = 0; i <= 44; i++) {
+    const a = i * 0.36;
+    const r = 0.4 + a * 0.46;
+    d += `${i === 0 ? "M" : "L"}${(cx + Math.cos(a) * r).toFixed(2)} ${(cy + Math.sin(a) * r).toFixed(2)} `;
+  }
+  return d;
+}
 
-  switch (shape) {
-    case "sleepy":
-      return <path d={`M${cx - r} ${cy} Q${cx} ${cy - r * 0.3} ${cx + r} ${cy}`} stroke="white" strokeWidth={r * 0.35} fill="none" strokeLinecap="round" opacity={0.9} />;
-    case "squint":
+function Eye({ kind, at, side, blinking }: { kind: Eyes; at: { x: number; y: number }; side: -1 | 1; blinking: boolean }) {
+  const { x, y } = at;
+  const stroke = { stroke: INK, strokeWidth: 3, fill: "none", strokeLinecap: "round" } as const;
+  const blink = blinking && (kind === "open" || kind === "wide" || kind === "lidded" || kind === "cross");
+  switch (kind) {
+    case "joy":
+      return <path d={`M${x - 6.8} ${y + 2.6} Q${x} ${y - 7.8} ${x + 6.8} ${y + 2.6}`} {...stroke} />;
+    case "closed":
+      return <path d={`M${x - 6.8} ${y - 1} Q${x} ${y + 5.4} ${x + 6.8} ${y - 1}`} {...stroke} strokeWidth={2.8} />;
+    case "spiral":
+      return <path className="pet-spiral" d={spiralPath(x, y)} stroke={INK} strokeWidth={1.8} fill="none" strokeLinecap="round" />;
+    case "lidded":
+      // Half a disc under a flat lid: calm, concentrating.
+      return (
+        <g className={blink ? "pet-eye is-blinking" : "pet-eye"}>
+          <path d={`M${x - 6.9} ${y - 1.4} L${x + 6.9} ${y - 1.4} A6.9 7.6 0 0 1 ${x - 6.9} ${y - 1.4} Z`} fill={INK} />
+        </g>
+      );
+    case "cross":
+      // Open eyes under brows that slant down toward the middle.
       return (
         <g>
-          <line x1={cx - r * 0.9} y1={cy} x2={cx + r * 0.9} y2={cy} stroke="white" strokeWidth={r * 0.3} strokeLinecap="round" opacity={0.9} />
+          <g className={blink ? "pet-eye is-blinking" : "pet-eye"}>
+            <ellipse cx={x} cy={y + 1.5} rx={5.8} ry={6.6} fill={INK} />
+            <circle cx={x + 1.7} cy={y - 0.6} r={1.6} fill="#fff" />
+          </g>
+          <path d={`M${x - side * 8} ${y - 11.5} L${x + side * 6} ${y - 6.4}`} {...stroke} strokeWidth={3.4} />
         </g>
       );
     case "wide":
+    case "open": {
+      const w = kind === "wide";
       return (
-        <g>
-          <circle cx={cx} cy={cy} r={r * 1.1} fill="white" opacity={0.95} />
-          <circle cx={cx} cy={cy} r={r * 0.55} fill={pupilColor} />
+        <g className={blink ? "pet-eye is-blinking" : "pet-eye"}>
+          <ellipse cx={x} cy={y} rx={w ? 7.6 : 6.6} ry={w ? 9.4 : 8} fill={INK} />
+          <circle cx={x + 2.2} cy={y - 2.8} r={w ? 2.5 : 2.1} fill="#fff" />
         </g>
       );
-    case "star":
-      // Sparkle-style eye: 4-point star
-      return (
-        <g>
-          <polygon
-            points={`${cx},${cy - r} ${cx + r * 0.3},${cy - r * 0.3} ${cx + r},${cy} ${cx + r * 0.3},${cy + r * 0.3} ${cx},${cy + r} ${cx - r * 0.3},${cy + r * 0.3} ${cx - r},${cy} ${cx - r * 0.3},${cy - r * 0.3}`}
-            fill="white"
-            opacity={0.95}
-          />
-        </g>
-      );
-    case "happy":
-      return <path d={`M${cx - r} ${cy - r * 0.2} Q${cx} ${cy + r * 0.9} ${cx + r} ${cy - r * 0.2}`} stroke="white" strokeWidth={r * 0.35} fill="none" strokeLinecap="round" opacity={0.95} />;
-    case "open":
-    default:
-      return (
-        <g>
-          <circle cx={cx} cy={cy} r={r} fill="white" opacity={0.92} />
-          <circle cx={cx + r * 0.18} cy={cy - r * 0.18} r={r * 0.48} fill={pupilColor} />
-          <circle cx={cx + r * 0.1} cy={cy - r * 0.35} r={r * 0.14} fill="white" opacity={0.7} />
-        </g>
-      );
+    }
   }
 }
 
-// ── Ribbon tail ───────────────────────────────────────────────────────────────
+export function PetSprite({ mood, variant, accentHex, size, animation, blinking, rootRef }: PetSpriteProps) {
+  const h = hueOf(accentHex);
+  const top = `hsl(${h} 72% 67%)`;
+  const bottom = `hsl(${(h + 16) % 360} 60% 47%)`;
+  const ribbon = `hsl(${(h + 28) % 360} 88% 87%)`;
 
-function Ribbon({ accentHex, size, mood }: { accentHex: string; size: number; mood: Mood }) {
-  const [h, s] = hexToHsl(accentHex);
-  const col1 = `hsl(${h} ${s * 0.8}% 70%)`;
-  const col2 = `hsl(${(h + 20) % 360} ${s * 0.6}% 55%)`;
-  const w = size * 0.22;
-  const len = size * 0.38;
-  const sway = mood === "grooving" || mood === "celebrate" ? size * 0.08 : 0;
-  return (
-    <svg width={w * 3} height={len} style={{ position: "absolute", bottom: `-${len * 0.55}px`, left: "50%", transform: "translateX(-50%)", overflow: "visible" }}>
-      <defs>
-        <linearGradient id="rib" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor={col1} stopOpacity={0.9} />
-          <stop offset="1" stopColor={col2} stopOpacity={0.3} />
-        </linearGradient>
-      </defs>
-      {/* Left ribbon strand */}
-      <path d={`M${w * 1.5} 0 Q${w * 1.5 - sway} ${len * 0.5} ${w * 0.6} ${len}`} stroke="url(#rib)" strokeWidth={w * 0.55} fill="none" strokeLinecap="round" />
-      {/* Right ribbon strand */}
-      <path d={`M${w * 1.5} 0 Q${w * 1.5 + sway} ${len * 0.5} ${w * 2.4} ${len}`} stroke="url(#rib)" strokeWidth={w * 0.55} fill="none" strokeLinecap="round" />
-    </svg>
-  );
-}
+  const grooving = mood === "grooving";
+  // The dance keeps running a moment after the music stops so it can fade out.
+  const [danceOn, setDanceOn] = useState(grooving);
+  if (grooving && !danceOn) setDanceOn(true);
+  useEffect(() => {
+    if (grooving || !danceOn) return;
+    const id = window.setTimeout(() => setDanceOn(false), DANCE_FADE_OUT_MS + 120);
+    return () => window.clearTimeout(id);
+  }, [grooving, danceOn]);
 
-// ── Sparkles (happy/celebrate) ────────────────────────────────────────────────
+  const moves = danceMoves(variant);
+  const style = {
+    width: size,
+    height: size,
+    "--lift": `${(moves.lift * size).toFixed(1)}px`,
+    "--sway": `${moves.sway}deg`,
+    "--cycle": `${danceCycleSeconds().toFixed(4)}s`,
+    "--dance-target": animation === "subtle" ? 0.5 : 1,
+  } as CSSProperties;
 
-function Sparkles({ accentHex, size }: { accentHex: string; size: number }) {
-  const [h] = hexToHsl(accentHex);
-  const sparks = [
-    { angle: 30,  dist: 0.72, color: `hsl(${h} 90% 75%)`, delay: 0 },
-    { angle: 110, dist: 0.68, color: `hsl(${(h + 40) % 360} 90% 78%)`, delay: 80 },
-    { angle: 210, dist: 0.75, color: `hsl(${(h + 20) % 360} 85% 72%)`, delay: 160 },
-    { angle: 300, dist: 0.65, color: `hsl(${(h + 60) % 360} 90% 80%)`, delay: 240 },
-    { angle: 160, dist: 0.80, color: `hsl(${(h + 80) % 360} 80% 74%)`, delay: 60 },
-  ];
-  return (
-    <>
-      {sparks.map((s, i) => {
-        const rad = (s.angle * Math.PI) / 180;
-        const dx = Math.cos(rad) * size * s.dist * 0.5;
-        const dy = Math.sin(rad) * size * s.dist * 0.5;
-        return (
-          <div
-            key={i}
-            className="pet-sparkle"
-            style={{
-              left: "50%",
-              top: "50%",
-              background: s.color,
-              "--dx": `${dx}px`,
-              "--dy": `${dy}px`,
-              animationDelay: `${s.delay}ms`,
-            } as CSSProperties}
-          />
-        );
-      })}
-    </>
-  );
-}
-
-// ── Main sprite ───────────────────────────────────────────────────────────────
-
-const DANCE_ANIMS: Record<DanceVariant, string> = {
-  0: "pet-bob 0.65s ease-in-out infinite",
-  1: "pet-sway 0.8s ease-in-out infinite",
-  2: "pet-bounce 0.55s ease-in-out infinite",
-  3: "pet-spin-sway 0.9s ease-in-out infinite",
-};
-
-function orbAnimation(mood: Mood, variant: DanceVariant, animation: string, energy: number): string | undefined {
-  if (animation === "off") return undefined;
-  const dur = (base: number) => `${(base / Math.max(0.4, energy)).toFixed(2)}s`;
-  switch (mood) {
-    case "sleeping":  return `pet-breathe ${dur(3.5)} ease-in-out infinite`;
-    case "idle":      return animation === "full" ? `pet-breathe ${dur(2.8)} ease-in-out infinite` : undefined;
-    case "grooving":  return animation === "full" ? DANCE_ANIMS[variant] : `pet-breathe ${dur(2.4)} ease-in-out infinite`;
-    case "perk":      return `pet-perk 600ms ease both`;
-    case "focused":   return `pet-focus-breathe ${dur(4)} ease-in-out infinite`;
-    case "break":     return `pet-stretch ${dur(2.2)} ease-in-out infinite`;
-    case "celebrate": return `pet-hop 600ms ease infinite`;
-    case "happy":     return `pet-squish 500ms ease both`;
-    case "carried":   return `pet-dangle 1.2s ease-in-out infinite`;
-  }
-}
-
-export function PetSprite({ mood, variant, energy, accentHex, size, pointerOffset, animation }: PetSpriteProps) {
-  const [h, s, l] = hexToHsl(accentHex);
-  const orbColor = `hsl(${h} ${Math.round(s * 0.85)}% ${Math.round(l * 0.55 + 12)}%)`;
-  const highColor = `hsl(${(h + 30) % 360} ${Math.round(s * 0.6)}% ${Math.round(l * 0.75 + 15)}%)`;
-  const glowColor = `hsl(${h} ${Math.round(s)}% ${Math.round(l * 0.8 + 10)}%)`;
-  const glowOpacity = mood === "sleeping" ? 0.18 : mood === "grooving" || mood === "celebrate" ? 0.55 : 0.38;
-
-  // Eye position: follows pointer when inside window
-  const eyeAngle = pointerOffset
-    ? Math.atan2(pointerOffset.y, pointerOffset.x)
-    : 0;
-  const eyeDist = pointerOffset ? Math.min(Math.hypot(pointerOffset.x, pointerOffset.y) / (size * 0.8), 1) : 0;
-  const eyeOffX = Math.cos(eyeAngle) * eyeDist * 2.5;
-  const eyeOffY = Math.sin(eyeAngle) * eyeDist * 2.5;
-
-  const eyeShape = moodEyes(mood);
-  const eyeR = size * 0.084;
-  const leftCx = size * 0.36 + eyeOffX;
-  const leftCy = size * 0.42 + eyeOffY;
-  const rightCx = size * 0.64 + eyeOffX;
-  const rightCy = size * 0.42 + eyeOffY;
-
-  const anim = orbAnimation(mood, variant, animation, energy);
-
-  const isSleeping = mood === "sleeping";
-  const isHappy = mood === "happy" || mood === "celebrate";
-
-  // Mouth shape
-  const mouthY = size * 0.60;
-  const mouthCx = size * 0.5;
-  const mouthW = size * 0.18;
-  const mouthPath = useMemo(() => {
-    if (mood === "focused") return `M${mouthCx - mouthW} ${mouthY} L${mouthCx + mouthW} ${mouthY}`;
-    if (mood === "sleeping") return `M${mouthCx - mouthW * 0.7} ${mouthY} Q${mouthCx} ${mouthY + mouthW * 0.5} ${mouthCx + mouthW * 0.7} ${mouthY}`;
-    if (isHappy || mood === "break") return `M${mouthCx - mouthW} ${mouthY - mouthW * 0.2} Q${mouthCx} ${mouthY + mouthW * 0.9} ${mouthCx + mouthW} ${mouthY - mouthW * 0.2}`;
-    // default: small smile
-    return `M${mouthCx - mouthW * 0.7} ${mouthY} Q${mouthCx} ${mouthY + mouthW * 0.55} ${mouthCx + mouthW * 0.7} ${mouthY}`;
-  }, [mood, mouthCx, mouthY, mouthW, isHappy]);
+  const kind = eyesFor(mood);
+  const sleeping = mood === "sleeping";
 
   return (
     <div
-      className="pet-orb"
-      style={{
-        width: size,
-        height: size,
-        animation: anim,
-      }}
+      ref={rootRef}
+      className="pet"
+      style={style}
       data-mood={mood}
+      data-motion={animation}
+      data-groove={grooving}
+      data-dance={danceOn}
     >
-      {/* Glow ring */}
-      <div
-        className="pet-glow"
-        style={{
-          background: `radial-gradient(circle, ${glowColor} 0%, transparent 70%)`,
-          opacity: glowOpacity,
-          transition: "opacity 600ms ease",
-        }}
-      />
-
-      {/* SVG orb body + face */}
-      <svg
-        className="pet-body"
-        viewBox={`0 0 ${size} ${size}`}
-        width={size}
-        height={size}
-        style={{ overflow: "visible" }}
-      >
-        <defs>
-          <radialGradient id="orb-grad" cx="38%" cy="32%" r="62%">
-            <stop offset="0%" stopColor={highColor} stopOpacity={0.95} />
-            <stop offset="45%" stopColor={orbColor} stopOpacity={1} />
-            <stop offset="100%" stopColor={`hsl(${h} ${Math.round(s * 0.9)}% ${Math.round(l * 0.28)}%)`} stopOpacity={1} />
-          </radialGradient>
-          <radialGradient id="orb-sheen" cx="30%" cy="25%" r="45%">
-            <stop offset="0%" stopColor="white" stopOpacity={0.28} />
-            <stop offset="100%" stopColor="white" stopOpacity={0} />
-          </radialGradient>
-        </defs>
-
-        {/* Main sphere */}
-        <circle cx={size / 2} cy={size / 2} r={size * 0.46} fill="url(#orb-grad)" />
-        {/* Sheen highlight */}
-        <ellipse cx={size * 0.40} cy={size * 0.33} rx={size * 0.22} ry={size * 0.14} fill="url(#orb-sheen)" />
-
-        {/* Eyes — blink animation on the group when idle */}
-        <g style={mood === "idle" && animation !== "off" ? { animation: "pet-blink 4s ease-in-out infinite" } : {}}>
-          <Eye shape={eyeShape} cx={leftCx} cy={leftCy} r={eyeR} accentHex={accentHex} />
-          <Eye shape={eyeShape} cx={rightCx} cy={rightCy} r={eyeR} accentHex={accentHex} />
-        </g>
-
-        {/* Mouth */}
-        <path d={mouthPath} stroke="white" strokeWidth={size * 0.028} fill="none" strokeLinecap="round" opacity={0.88} />
-
-        {/* Cheek blush (grooving/celebrate/happy) */}
-        {(mood === "grooving" || mood === "celebrate" || mood === "happy" || mood === "break") && (
-          <>
-            <ellipse cx={size * 0.28} cy={size * 0.55} rx={size * 0.09} ry={size * 0.055} fill={`hsl(${h} 90% 75%)`} opacity={0.38} />
-            <ellipse cx={size * 0.72} cy={size * 0.55} rx={size * 0.09} ry={size * 0.055} fill={`hsl(${h} 90% 75%)`} opacity={0.38} />
-          </>
-        )}
-      </svg>
-
-      {/* Z floaters for sleeping */}
-      {isSleeping && animation !== "off" && (
+      <div className="pet-anim">
+        <div className="pet-lean">
+          <svg viewBox="0 0 100 100" width={size} height={size} aria-hidden="true" style={{ overflow: "visible" }}>
+            <defs>
+              <linearGradient id="pet-body" x1="0.2" y1="0.05" x2="0.8" y2="1">
+                <stop offset="0" stopColor={top} />
+                <stop offset="1" stopColor={bottom} />
+              </linearGradient>
+            </defs>
+            {/* The ribbon's far side, behind the body */}
+            <g transform="translate(50 56) rotate(-16)">
+              <path d="M-50 0 A50 13 0 0 1 50 0" stroke={ribbon} strokeWidth={3.2} fill="none" strokeLinecap="round" opacity={0.55} />
+            </g>
+            <circle cx={50} cy={52} r={40} fill="url(#pet-body)" />
+            {/* ...and its near side, across the front */}
+            <g transform="translate(50 56) rotate(-16)">
+              <path d="M-50 0 A50 13 0 0 0 50 0" stroke={ribbon} strokeWidth={3.2} fill="none" strokeLinecap="round" opacity={0.92} />
+            </g>
+            <g className="pet-face">
+              <Eye kind={kind} at={LEFT} side={-1} blinking={blinking} />
+              <Eye kind={kind} at={RIGHT} side={1} blinking={blinking} />
+            </g>
+          </svg>
+        </div>
+      </div>
+      {sleeping && animation !== "off" && (
         <>
-          <span className="pet-z" style={{ color: `hsl(${h} 70% 80%)` }}>z</span>
-          <span className="pet-z" style={{ color: `hsl(${h} 65% 75%)`, animationDelay: "1s" }}>z</span>
-          <span className="pet-z" style={{ color: `hsl(${h} 60% 72%)`, animationDelay: "2s" }}>z</span>
+          <span className="pet-z" style={{ color: ribbon }}>z</span>
+          <span className="pet-z" style={{ color: ribbon, animationDelay: "1.4s" }}>z</span>
         </>
       )}
-
-      {/* Sparkles for happy/celebrate */}
-      {isHappy && <Sparkles accentHex={accentHex} size={size} />}
-
-      {/* Ribbon tail */}
-      <Ribbon accentHex={accentHex} size={size} mood={mood} />
     </div>
   );
 }

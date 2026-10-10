@@ -51,6 +51,9 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 38%);
 }
 
+/* Views are laid out at design size and scaled as one by --ui-scale (lib/layout.ts). */
+.scaler { position: absolute; top: 0; left: 0; width: calc(100% / var(--ui-scale, 1)); height: calc(100% / var(--ui-scale, 1)); transform: scale(var(--ui-scale, 1)); transform-origin: 0 0; }
+
 .face { position: absolute; inset: 0; animation: face-in 280ms 80ms var(--ease) both; }
 .face-pill { display: flex; align-items: center; padding: 0 12px; cursor: pointer; }
 .face-clock { display: flex; align-items: center; padding: 0 14px; cursor: pointer; height: 100%; }
@@ -162,13 +165,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   border: 1px solid var(--border);
   flex: none;
 }
-.chip-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 75%, transparent);
-}
+.clock-timer-chip svg { font-size: 13px; color: var(--text-2); }
 .chip-text {
   font-size: 11px;
   font-weight: 600;
@@ -183,8 +180,6 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .pill-name { font-size: 12px; color: var(--text-2); letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
 .pill-clock { font-size: 11px; font-variant-numeric: tabular-nums; color: var(--text-2); padding: 0 3px; letter-spacing: 0.02em; }
 .pill-timer { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--text-2); }
-.pill-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 70%, transparent); flex: none; transition: background var(--dur-fast), box-shadow var(--dur-fast); }
-.pill-dot[data-playing="false"] { background: transparent; box-shadow: inset 0 0 0 1.5px var(--text-3); }
 .peek-text { min-width: 0; flex: 1; display: flex; flex-direction: column; line-height: 1.25; }
 .peek-text strong { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .peek-text span { font-size: 11.5px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -212,8 +207,6 @@ html[data-hidden] * { animation-play-state: paused !important; }
 .music-top { display: flex; align-items: center; gap: 14px; }
 .meta { min-width: 0; flex: 1; }
 .meta-source { display: flex; align-items: center; gap: 6px; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-3); }
-.source-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-3); flex: none; }
-.source-dot[data-playing="true"] { background: var(--accent); box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 70%, transparent); }
 .status-chip { margin-left: 4px; padding: 1px 6px; border-radius: 6px; background: var(--surface-2); text-transform: none; letter-spacing: 0; }
 .meta-title { margin-top: 6px; font: 600 17px/1.2 var(--font-display); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
 .meta-artist { margin-top: 3px; font-size: 13px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -249,6 +242,7 @@ button:disabled { opacity: 0.3; cursor: default; }
 
 .players { display: flex; gap: 6px; margin-top: 8px; }
 .players button { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2); font-size: 11.5px; padding: 3px 9px; border-radius: 999px; cursor: pointer; }
+.players button[data-playing="true"] { color: var(--text); }
 .players button[aria-checked="true"] { color: var(--text); border-color: color-mix(in srgb, var(--accent) 70%, transparent); }
 
 .panel-empty { padding: 20px 22px; justify-content: center; }

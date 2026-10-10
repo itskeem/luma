@@ -21,7 +21,7 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "toggle" => window::toggle_user_hidden(app),
-            "pet_toggle" => pet_window::toggle_hidden(app),
+            "pet_toggle" => pet_window::toggle(app),
             "settings" => {
                 window::reveal(app);
                 let _ = app.emit_to(window::LABEL, "navigate", "settings");

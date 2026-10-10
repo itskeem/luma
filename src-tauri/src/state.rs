@@ -33,8 +33,6 @@ pub struct PetWinState {
     pub last_user_move: Option<Instant>,
     pub settling: bool,
     pub shown: bool,
-    /// The user explicitly hid the pet from the tray.
-    pub user_hidden: bool,
 }
 
 pub struct Visibility {
@@ -94,7 +92,6 @@ impl AppState {
                 last_user_move: None,
                 settling: false,
                 shown: false,
-                user_hidden: false,
             }),
             last_focus: Mutex::new(FocusStatePayload::default()),
             vis: Mutex::new(Visibility { user_hidden: false, has_player: false, force_visible: false }),

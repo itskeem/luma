@@ -49,7 +49,6 @@ export function MusicView({ media, position, density, command, pin, go }: Props)
         <Artwork src={media.artworkUrl} size={compact ? 64 : 92} brand />
         <div className="meta">
           <div className="meta-source">
-            <span className="source-dot" data-playing={playing} />
             <span>{a.appName}</span>
             {status && <span className="status-chip">{status}</span>}
           </div>
@@ -98,8 +97,7 @@ export function MusicView({ media, position, density, command, pin, go }: Props)
             Auto
           </button>
           {state.players.map((p) => (
-            <button key={p.id} type="button" role="radio" aria-checked={state.pinnedId === p.id} onClick={() => pin(p.id)}>
-              <span className="source-dot" data-playing={p.status === "playing"} />
+            <button key={p.id} type="button" role="radio" aria-checked={state.pinnedId === p.id} data-playing={p.status === "playing"} onClick={() => pin(p.id)}>
               {p.appName}
             </button>
           ))}

@@ -49,8 +49,12 @@ pub fn update_settings(app: AppHandle, state: State<'_, AppState>, settings: Set
     if next.idle != prev.idle {
         window::refresh_visibility(&app);
     }
-    if pet_enabled_changed || next.pet.size != prev.pet.size {
+    if pet_enabled_changed {
         pet_window::refresh_visibility(&app);
+    }
+    // A visible pet must be resized right away, not only the next time it is shown.
+    if next.pet.size != prev.pet.size {
+        pet_window::apply_placement(&app);
     }
     match startup_error {
         Some(e) => Err(e),
@@ -120,11 +124,11 @@ pub fn get_focus_state(state: State<'_, AppState>) -> FocusStatePayload {
 /// Show the pet window (called from settings toggle or tray menu).
 #[tauri::command]
 pub fn show_pet(app: AppHandle) {
-    pet_window::set_hidden(&app, false);
+    pet_window::set_enabled(&app, true);
 }
 
 /// Hide the pet window.
 #[tauri::command]
 pub fn hide_pet(app: AppHandle) {
-    pet_window::set_hidden(&app, true);
+    pet_window::set_enabled(&app, false);
 }

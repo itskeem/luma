@@ -29,7 +29,6 @@ export function Pill({ media, timerLabel, clockTime }: PillProps) {
       <span className="pill-spacer" />
       {clockTime && <span className="pill-clock">{clockTime}</span>}
       {timerLabel && <span className="pill-timer">{timerLabel}</span>}
-      <span className="pill-dot" data-playing={playing} title={playing ? "Playing" : "Paused"} />
     </div>
   );
 }

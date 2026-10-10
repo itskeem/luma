@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { isExpanded, islandSize, PAD, windowSize } from "./layout.ts";
+import { designSize, isExpanded, islandSize, PAD, UI_SCALE, windowSize } from "./layout.ts";
 
 const base = { density: "comfortable", hasMedia: true, multiPlayer: false, timerInPill: false } as const;
 
@@ -9,15 +9,15 @@ test("collapsed is a small pill, wider with media or a visible timer", () => {
   const media = islandSize({ ...base, view: "collapsed" });
   const timer = islandSize({ ...base, view: "collapsed", timerInPill: true });
   assert.ok(idle.w < media.w && media.w < timer.w);
-  assert.equal(media.h, 38);
+  assert.equal(designSize({ ...base, view: "collapsed" }).h, 38);
 });
 
 test("clock is an elegant island with time and date, larger than the music pill", () => {
   const clock = islandSize({ ...base, view: "clock" });
   const pill = islandSize({ ...base, view: "collapsed" });
   assert.ok(clock.h > pill.h);
-  assert.equal(clock.h, 60);
-  assert.equal(clock.w, 208);
+  assert.equal(designSize({ ...base, view: "clock" }).h, 60);
+  assert.equal(designSize({ ...base, view: "clock" }).w, 208);
 
   const withSeconds = islandSize({ ...base, view: "clock", showSeconds: true });
   assert.ok(withSeconds.w > clock.w);
@@ -26,7 +26,7 @@ test("clock is an elegant island with time and date, larger than the music pill"
   assert.ok(withTimer.w > clock.w);
 
   const compactClock = islandSize({ ...base, view: "clock", density: "compact" });
-  assert.equal(compactClock.h, 52);
+  assert.equal(designSize({ ...base, view: "clock", density: "compact" }).h, 52);
   assert.ok(compactClock.w < clock.w);
 });
 
@@ -64,4 +64,15 @@ test("the music view is a short card when there is nothing to show", () => {
   const empty = islandSize({ ...base, view: "music", hasMedia: false });
   const full = islandSize({ ...base, view: "music" });
   assert.ok(empty.h < full.h && empty.w === full.w);
+});
+
+test("the island is drawn at 90% of its design size, everywhere", () => {
+  assert.equal(UI_SCALE, 0.9);
+  for (const view of ["clock", "collapsed", "peek", "music", "tools", "settings"] as const) {
+    const d = designSize({ ...base, view });
+    const s = islandSize({ ...base, view });
+    assert.equal(s.w, Math.round(d.w * UI_SCALE));
+    assert.equal(s.h, Math.round(d.h * UI_SCALE));
+    assert.ok(s.w < d.w && s.h < d.h);
+  }
 });
