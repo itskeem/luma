@@ -1,0 +1,38 @@
+/* Design tokens. Components read these; themes override them. */
+
+@property --accent {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #8f7bff;
+}
+
+:root {
+  --font: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+
+  --text: #f5f5f8;
+  --text-2: rgba(245, 245, 248, 0.68);
+  --text-3: rgba(245, 245, 248, 0.46);
+
+  --surface: rgba(13, 13, 19, 0.94);
+  --surface-2: rgba(255, 255, 255, 0.06);
+  --surface-3: rgba(255, 255, 255, 0.11);
+  --border: rgba(255, 255, 255, 0.09);
+
+  --accent: #8f7bff;
+
+  --ease: cubic-bezier(0.22, 0.9, 0.24, 1);
+  --dur: 380ms;
+  --dur-fast: 140ms;
+  --r-island: 22px;
+}
+
+/* "adaptive" uses the accent taken from the artwork (set inline); these are the fixed themes. */
+[data-theme="luma"] { --accent: #8f7bff; }
+[data-theme="midnight"] { --accent: #6ea0ff; --surface: rgba(8, 11, 22, 0.95); }
+[data-theme="graphite"] { --accent: #cfd2dc; --surface: rgba(26, 26, 30, 0.96); }
+
+/* Fixed themes ignore any artwork accent that is still set inline. */
+[data-theme="luma"] .island,
+[data-theme="midnight"] .island,
+[data-theme="graphite"] .island { --accent: initial; }

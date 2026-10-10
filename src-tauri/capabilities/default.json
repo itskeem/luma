@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The island window may listen for events, call Luma's own commands and start a native drag. Everything that touches the OS goes through Luma's commands.",
+  "windows": ["island"],
+  "permissions": ["core:default", "core:window:allow-start-dragging"]
+}

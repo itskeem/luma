@@ -1,0 +1,51 @@
+// Island sizes per view, in logical px. The window is the island plus PAD on
+// every side (room for the shadow), and the backend keeps it that size.
+
+import type { Density } from "../types.ts";
+
+export const PAD = 14;
+/** Matches --dur in tokens.css. */
+export const TRANSITION_MS = 380;
+
+export type View = "collapsed" | "peek" | "music" | "tools" | "settings";
+
+export interface Size {
+  w: number;
+  h: number;
+}
+
+export interface LayoutInput {
+  view: View;
+  density: Density;
+  hasMedia: boolean;
+  /** More than one player: the music view gets a row to choose between them. */
+  multiPlayer: boolean;
+  /** The collapsed pill shows the focus countdown. */
+  timerInPill: boolean;
+}
+
+export function islandSize({ view, density, hasMedia, multiPlayer, timerInPill }: LayoutInput): Size {
+  const compact = density === "compact";
+  switch (view) {
+    case "collapsed":
+      return { w: (hasMedia ? 188 : 116) + (timerInPill ? 52 : 0), h: 38 };
+    case "peek":
+      return { w: 312, h: 46 };
+    case "music":
+      // Nothing to show (no player, or no media service): a short card, not a full player.
+      if (!hasMedia) return { w: compact ? 344 : 392, h: 150 };
+      return compact
+        ? { w: 344, h: 174 + (multiPlayer ? 32 : 0) }
+        : { w: 392, h: 222 + (multiPlayer ? 34 : 0) };
+    case "tools":
+      return compact ? { w: 344, h: 214 } : { w: 392, h: 244 };
+    case "settings":
+      return compact ? { w: 360, h: 392 } : { w: 392, h: 420 };
+  }
+}
+
+export function windowSize(island: Size): Size {
+  return { w: island.w + PAD * 2, h: island.h + PAD * 2 };
+}
+
+export const isExpanded = (v: View): boolean => v === "music" || v === "tools" || v === "settings";
