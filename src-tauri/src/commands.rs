@@ -5,8 +5,9 @@ use luma_core::settings::{self, Settings};
 use tauri::{AppHandle, Emitter, State};
 use tauri_plugin_autostart::ManagerExt;
 
-use crate::state::{lock, AppState};
+use crate::state::{lock, AppState, FocusStatePayload};
 use crate::window;
+use crate::pet_window;
 
 #[tauri::command]
 pub fn get_settings(state: State<'_, AppState>) -> Settings {
@@ -20,6 +21,8 @@ pub fn update_settings(app: AppHandle, state: State<'_, AppState>, settings: Set
     let mut next = settings;
     let prev = lock(&state.settings).clone();
     next.custom_anchor = prev.custom_anchor.clone();
+    // The pet's own custom_anchor is managed by pet_window drag-settle, not the UI.
+    next.pet.custom_anchor = prev.pet.custom_anchor.clone();
     next.sanitize();
 
     let mut startup_error = None;
@@ -32,6 +35,8 @@ pub fn update_settings(app: AppHandle, state: State<'_, AppState>, settings: Set
         }
     }
 
+    let pet_enabled_changed = next.pet.enabled != prev.pet.enabled;
+
     *lock(&state.settings) = next.clone();
     if let Err(e) = settings::save(&state.settings_path, &next) {
         eprintln!("luma: could not save settings: {e}");
@@ -43,6 +48,9 @@ pub fn update_settings(app: AppHandle, state: State<'_, AppState>, settings: Set
     }
     if next.idle != prev.idle {
         window::refresh_visibility(&app);
+    }
+    if pet_enabled_changed || next.pet.size != prev.pet.size {
+        pet_window::refresh_visibility(&app);
     }
     match startup_error {
         Some(e) => Err(e),
@@ -91,4 +99,32 @@ pub fn hide_island(app: AppHandle) {
 #[tauri::command]
 pub fn quit_app(app: AppHandle) {
     crate::quit(&app);
+}
+
+// ── Pet commands ──────────────────────────────────────────────────────────────
+
+/// Island publishes its focus timer state; we store it and re-emit to all
+/// windows so the pet can subscribe without crossing React trees.
+#[tauri::command]
+pub fn publish_focus_state(app: AppHandle, state: State<'_, AppState>, payload: FocusStatePayload) {
+    *lock(&state.last_focus) = payload.clone();
+    let _ = app.emit("focus-state", &payload);
+}
+
+/// Pet window reads the initial focus state on startup (before any event arrives).
+#[tauri::command]
+pub fn get_focus_state(state: State<'_, AppState>) -> FocusStatePayload {
+    lock(&state.last_focus).clone()
+}
+
+/// Show the pet window (called from settings toggle or tray menu).
+#[tauri::command]
+pub fn show_pet(app: AppHandle) {
+    pet_window::set_hidden(&app, false);
+}
+
+/// Hide the pet window.
+#[tauri::command]
+pub fn hide_pet(app: AppHandle) {
+    pet_window::set_hidden(&app, true);
 }

@@ -5,7 +5,7 @@
 // backend so layouts and states can be designed and checked. It is never
 // loaded inside the desktop app, and the UI labels it on screen.
 
-import type { Backend, Unlisten } from "../lib/backend.ts";
+import type { Backend, FocusStatePayload, Unlisten } from "../lib/backend.ts";
 import type { ActiveMedia, ControlAction, MediaState, PlayerSummary, Settings } from "../types.ts";
 import { DEFAULT_SETTINGS } from "../types.ts";
 
@@ -45,9 +45,12 @@ export function createPreviewBackend(): Backend {
   let capturedAt = Date.now();
   let pinned: string | null = null;
 
+  let lastFocus: FocusStatePayload = { phase: "focus", running: false, endsAtMs: 0 };
+
   const mediaCbs = new Set<(s: MediaState) => void>();
   const settingsCbs = new Set<(s: Settings) => void>();
   const navCbs = new Set<(v: string) => void>();
+  const focusCbs = new Set<(s: FocusStatePayload) => void>();
 
   const position = () => (playing ? positionMs + (Date.now() - capturedAt) : positionMs);
   const freeze = () => {
@@ -148,9 +151,17 @@ export function createPreviewBackend(): Backend {
     startDragging: () => undefined,
     hideIsland: () => undefined,
     quitApp: () => undefined,
+    publishFocusState: (payload) => {
+      lastFocus = payload;
+      focusCbs.forEach((cb) => cb(payload));
+    },
+    getFocusState: () => Promise.resolve(lastFocus),
+    showPet: () => undefined,
+    hidePet: () => undefined,
     onMediaState: (cb) => subscribe(mediaCbs, cb),
     onSettings: (cb) => subscribe(settingsCbs, cb),
     onNavigate: (cb) => subscribe(navCbs, cb),
+    onFocusState: (cb) => subscribe(focusCbs, cb),
     preview: {
       scenarios: SCENARIOS,
       scenario: () => scenario,

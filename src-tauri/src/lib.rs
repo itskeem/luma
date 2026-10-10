@@ -1,17 +1,19 @@
 //! Luma — a music-first desktop island.
 //!
 //! Layout of this crate:
-//! - `media`    the platform media bridge (Windows SMTC), behind one small interface
-//! - `window`   island placement, size, dragging, visibility
-//! - `platform` the handful of OS calls Tauri doesn't wrap
-//! - `tray`     notification-area icon
-//! - `commands` what the front end may call
-//! - `state`    shared state
+//! - `media`      the platform media bridge (Windows SMTC), behind one small interface
+//! - `window`     island placement, size, dragging, visibility
+//! - `pet_window` companion pet window placement, dragging, visibility
+//! - `platform`   the handful of OS calls Tauri doesn't wrap
+//! - `tray`       notification-area icon
+//! - `commands`   what the front end may call
+//! - `state`      shared state
 //!
 //! Platform-independent logic (selection, settings, placement maths) lives in `luma-core`.
 
 mod commands;
 mod media;
+mod pet_window;
 mod platform;
 mod state;
 mod tray;
@@ -55,9 +57,16 @@ pub fn run() {
 
             tray::build(app.handle())?;
 
+            // Island window.
             let win = window::island(app.handle()).ok_or("the island window is missing from tauri.conf.json")?;
             platform::make_non_activating(&win);
             window::refresh_visibility(app.handle());
+
+            // Pet window (may be absent if pet.enabled is false; we still make it non-activating).
+            if let Some(pet_win) = pet_window::pet(app.handle()) {
+                platform::make_non_activating(&pet_win);
+            }
+            pet_window::refresh_visibility(app.handle());
 
             // Started last, so its first state finds everything it needs.
             let handle = app.handle().clone();
@@ -72,7 +81,10 @@ pub fn run() {
             let _ = state.media.set(media);
             Ok(())
         })
-        .on_window_event(|window, event| window::on_event(window, event))
+        .on_window_event(|window, event| {
+            window::on_event(window, event);
+            pet_window::on_event(window, event);
+        })
         .invoke_handler(tauri::generate_handler![
             commands::get_settings,
             commands::update_settings,
@@ -83,6 +95,10 @@ pub fn run() {
             commands::set_island_size,
             commands::hide_island,
             commands::quit_app,
+            commands::publish_focus_state,
+            commands::get_focus_state,
+            commands::show_pet,
+            commands::hide_pet,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Luma")

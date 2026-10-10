@@ -5,13 +5,15 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{AppHandle, Emitter};
 
 use crate::window;
+use crate::pet_window;
 
 pub fn build(app: &AppHandle) -> tauri::Result<()> {
     let toggle = MenuItem::with_id(app, "toggle", "Show / hide Luma", true, None::<&str>)?;
+    let pet_toggle = MenuItem::with_id(app, "pet_toggle", "Show / hide pet", true, None::<&str>)?;
     let settings = MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit Luma", true, None::<&str>)?;
     let sep = PredefinedMenuItem::separator(app)?;
-    let menu = Menu::with_items(app, &[&toggle, &settings, &sep, &quit])?;
+    let menu = Menu::with_items(app, &[&toggle, &pet_toggle, &settings, &sep, &quit])?;
 
     let mut builder = TrayIconBuilder::with_id("luma")
         .tooltip("Luma")
@@ -19,6 +21,7 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "toggle" => window::toggle_user_hidden(app),
+            "pet_toggle" => pet_window::toggle_hidden(app),
             "settings" => {
                 window::reveal(app);
                 let _ = app.emit_to(window::LABEL, "navigate", "settings");

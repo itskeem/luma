@@ -90,6 +90,51 @@ pub fn monitor_at(point: (i32, i32), monitors: &[MonitorInfo]) -> Option<usize> 
     monitors.iter().position(|m| contains(&m.rect, point.0, point.1))
 }
 
+/// Fallback bottom margin used when the real work area is unavailable (typical
+/// Windows taskbar at the bottom is 40–48px logical).
+pub const TASKBAR_FALLBACK_MARGIN: f64 = 48.0;
+/// Right-edge gap for the pet's default position.
+pub const PET_EDGE_GAP: f64 = 16.0;
+
+/// Default bottom-right position for the pet window.
+///
+/// `win_w`, `win_h` are the pet window size in physical pixels.
+/// Uses a `TASKBAR_FALLBACK_MARGIN` bottom margin because Tauri 2.12.x does
+/// not expose `Monitor::work_area()`; verified as "unverified" in WINDOWS-TESTING.md.
+pub fn pet_default_position(mon: &MonitorInfo, win_w: u32, win_h: u32) -> (i32, i32) {
+    let right_gap = px(PET_EDGE_GAP, mon.scale);
+    let bottom_margin = px(TASKBAR_FALLBACK_MARGIN, mon.scale);
+    let x = mon.rect.x + mon.rect.w as i32 - win_w as i32 - right_gap;
+    let y = mon.rect.y + mon.rect.h as i32 - win_h as i32 - bottom_margin;
+    clamp_pet_to_work_area(x, y, win_w, win_h, mon)
+}
+
+/// Clamps the pet window to the visible work-area approximation (full monitor
+/// minus a bottom margin for the taskbar).
+pub fn clamp_pet_to_work_area(x: i32, y: i32, w: u32, h: u32, mon: &MonitorInfo) -> (i32, i32) {
+    let edge = px(EDGE_MARGIN, mon.scale);
+    let bottom_margin = px(TASKBAR_FALLBACK_MARGIN, mon.scale);
+    let min_x = mon.rect.x + edge;
+    let min_y = mon.rect.y + edge;
+    let max_x = (mon.rect.x + mon.rect.w as i32 - w as i32 - edge).max(min_x);
+    let max_y = (mon.rect.y + mon.rect.h as i32 - h as i32 - bottom_margin).max(min_y);
+    (x.clamp(min_x, max_x), y.clamp(min_y, max_y))
+}
+
+/// Saves (centre x, centre y) in logical px from the monitor origin for the pet.
+pub fn pet_anchor_from_window(mon: &MonitorInfo, x: i32, y: i32, w: u32, h: u32) -> (f64, f64) {
+    let cx = (x - mon.rect.x) as f64 / mon.scale + (w as f64 / mon.scale) / 2.0;
+    let cy = (y - mon.rect.y) as f64 / mon.scale + (h as f64 / mon.scale) / 2.0;
+    (cx, cy)
+}
+
+/// Resolves the pet window position from a saved anchor (centre x, centre y).
+pub fn pet_resolve_custom(mon: &MonitorInfo, cx: f64, cy: f64, win_w: u32, win_h: u32) -> (i32, i32) {
+    let x = mon.rect.x + px(cx, mon.scale) - win_w as i32 / 2;
+    let y = mon.rect.y + px(cy, mon.scale) - win_h as i32 / 2;
+    clamp_pet_to_work_area(x, y, win_w, win_h, mon)
+}
+
 /// Finds a remembered monitor again: same name at the same place, then the
 /// same name alone if it is unambiguous (layout rearranged). `None` means it
 /// was unplugged and the caller falls back to the primary monitor.
@@ -211,5 +256,37 @@ mod tests {
         assert_eq!(monitor_at((100, 100), &ms), Some(0));
         assert_eq!(monitor_at((2000, 10), &ms), Some(1));
         assert_eq!(monitor_at((-5, 10), &ms), None);
+    }
+
+    #[test]
+    fn pet_default_is_bottom_right_of_work_area() {
+        let m = mon("A", 0, 0, 1920, 1080, 1.0);
+        // 112 × 112 window (96 px sprite + 16 px margin each side)
+        let (x, y) = pet_default_position(&m, 112, 112);
+        assert_eq!(x, 1920 - 112 - 16); // right gap
+        assert_eq!(y, 1080 - 112 - 48); // taskbar fallback margin
+    }
+
+    #[test]
+    fn pet_clamp_keeps_window_inside_work_area() {
+        let m = mon("A", 0, 0, 1920, 1080, 1.0);
+        let (x, y) = clamp_pet_to_work_area(9000, 9000, 112, 112, &m);
+        assert!(x + 112 <= 1920 - 4);
+        assert!(y + 112 <= 1080 - 48);
+        let (x, y) = clamp_pet_to_work_area(-9000, -9000, 112, 112, &m);
+        assert!(x >= 4);
+        assert!(y >= 4);
+    }
+
+    #[test]
+    fn pet_custom_anchor_round_trips() {
+        let m = mon("A", 0, 0, 1920, 1080, 1.25);
+        let (win_w, win_h) = (140, 140); // 112 logical at 1.25
+        let init_x = 1500i32;
+        let init_y = 700i32;
+        let (cx, cy) = pet_anchor_from_window(&m, init_x, init_y, win_w as u32, win_h as u32);
+        let (rx, ry) = pet_resolve_custom(&m, cx, cy, win_w as u32, win_h as u32);
+        assert!((rx - init_x).abs() <= 1, "x round-trip: {rx} vs {init_x}");
+        assert!((ry - init_y).abs() <= 1, "y round-trip: {ry} vs {init_y}");
     }
 }

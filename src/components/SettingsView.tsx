@@ -1,7 +1,7 @@
 import { useBackend } from "../lib/backend.ts";
 import type { SettingsApi } from "../state/useSettings.ts";
 import type { BaseView } from "../state/useIsland.ts";
-import type { Animation, ClockFormat, Density, IdleBehavior, PositionPreset, Theme } from "../types.ts";
+import type { Animation, ClockFormat, Density, IdleBehavior, PetSize, PositionPreset, Theme } from "../types.ts";
 import { Row, Section, Segmented, Stepper, Toggle } from "./controls.tsx";
 import { Nav } from "./MusicView.tsx";
 
@@ -16,6 +16,7 @@ export function SettingsView({ api, go }: { api: SettingsApi; go: (v: BaseView) 
   const backend = useBackend();
   const { settings: s, update, error } = api;
   const focus = (patch: Partial<typeof s.focus>) => update({ focus: { ...s.focus, ...patch } });
+  const pet = (patch: Partial<typeof s.pet>) => update({ pet: { ...s.pet, ...patch } });
 
   return (
     <div className="panel settings">
@@ -44,7 +45,7 @@ export function SettingsView({ api, go }: { api: SettingsApi; go: (v: BaseView) 
           </Row>
         </Section>
 
-        <Section title="Clock & Companion">
+        <Section title="Clock &amp; Companion">
           <Row label="Time format">
             <Segmented<ClockFormat>
               label="Time format"
@@ -76,6 +77,37 @@ export function SettingsView({ api, go }: { api: SettingsApi; go: (v: BaseView) 
               ]}
             />
           </Row>
+        </Section>
+
+        <Section title="Pet">
+          <Row label="Show pet" hint="Floating companion that reacts to music &amp; focus">
+            <Toggle label="Enable pet" checked={s.pet.enabled} onChange={(enabled) => {
+              pet({ enabled });
+              if (enabled) backend.showPet(); else backend.hidePet();
+            }} />
+          </Row>
+          {s.pet.enabled && (
+            <>
+              <Row label="Size">
+                <Segmented<PetSize>
+                  label="Pet size"
+                  value={s.pet.size}
+                  onChange={(size) => pet({ size })}
+                  options={[
+                    { value: "small", label: "Small" },
+                    { value: "medium", label: "Medium" },
+                    { value: "large", label: "Large" },
+                  ]}
+                />
+              </Row>
+              <Row label="Reacts to music">
+                <Toggle label="Reacts to music" checked={s.pet.reactsToMusic} onChange={(reactsToMusic) => pet({ reactsToMusic })} />
+              </Row>
+              <Row label="Reacts to focus timer">
+                <Toggle label="Reacts to focus timer" checked={s.pet.reactsToFocus} onChange={(reactsToFocus) => pet({ reactsToFocus })} />
+              </Row>
+            </>
+          )}
         </Section>
 
         <Section title="Position">

@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { MediaState, Settings } from "../types.ts";
-import type { Backend } from "./backend.ts";
+import type { Backend, FocusStatePayload } from "./backend.ts";
 
 // Fire-and-forget commands must not leave unhandled rejections behind.
 const quiet = (p: Promise<unknown>) => void p.catch((e) => console.error("luma:", e));
@@ -19,7 +19,12 @@ export const tauriBackend: Backend = {
   startDragging: () => quiet(getCurrentWindow().startDragging()),
   hideIsland: () => quiet(invoke("hide_island")),
   quitApp: () => quiet(invoke("quit_app")),
+  publishFocusState: (payload) => quiet(invoke("publish_focus_state", { payload })),
+  getFocusState: () => invoke<FocusStatePayload>("get_focus_state"),
+  showPet: () => quiet(invoke("show_pet")),
+  hidePet: () => quiet(invoke("hide_pet")),
   onMediaState: (cb) => listen<MediaState>("media-state", (e) => cb(e.payload)),
   onSettings: (cb) => listen<Settings>("settings-changed", (e) => cb(e.payload)),
   onNavigate: (cb) => listen<string>("navigate", (e) => cb(e.payload)),
+  onFocusState: (cb) => listen<FocusStatePayload>("focus-state", (e) => cb(e.payload)),
 };

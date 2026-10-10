@@ -7,6 +7,14 @@ import type { ControlAction, MediaState, Settings } from "../types.ts";
 
 export type Unlisten = () => void;
 
+/** Published by the island whenever the focus timer phase or running state changes. */
+export interface FocusStatePayload {
+  phase: "focus" | "short" | "long";
+  running: boolean;
+  /** Unix ms when the phase ends; 0 when not running. */
+  endsAtMs: number;
+}
+
 export interface PreviewControls {
   scenarios: readonly string[];
   scenario: () => string;
@@ -26,9 +34,17 @@ export interface Backend {
   startDragging(): void;
   hideIsland(): void;
   quitApp(): void;
+  /** Island → Rust → all windows: publish focus timer state. */
+  publishFocusState(payload: FocusStatePayload): void;
+  /** Pet window initial load: read last known focus state. */
+  getFocusState(): Promise<FocusStatePayload>;
+  /** Show or hide the pet window. */
+  showPet(): void;
+  hidePet(): void;
   onMediaState(cb: (s: MediaState) => void): Promise<Unlisten>;
   onSettings(cb: (s: Settings) => void): Promise<Unlisten>;
   onNavigate(cb: (view: string) => void): Promise<Unlisten>;
+  onFocusState(cb: (s: FocusStatePayload) => void): Promise<Unlisten>;
   preview?: PreviewControls;
 }
 

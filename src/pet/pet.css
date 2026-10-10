@@ -1,0 +1,185 @@
+/* Pet window — transparent, no borders, no background. */
+*, *::before, *::after { box-sizing: border-box; }
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  background: transparent;
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* ── Stage ── */
+.pet-stage {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+}
+
+/* ── Orb ── */
+.pet-orb {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  cursor: pointer;
+  /* Size is set inline from settings */
+  transition: transform 120ms ease;
+}
+.pet-orb:active { transform: scale(0.93) !important; }
+
+/* The orb body: a glowing sphere */
+.pet-body {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  position: relative;
+  overflow: visible;
+}
+
+/* Ambient glow ring */
+.pet-glow {
+  position: absolute;
+  inset: -30%;
+  border-radius: 50%;
+  pointer-events: none;
+  transition: opacity 600ms ease, background 600ms ease;
+}
+
+/* Face layer sits above body */
+.pet-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+
+/* Ribbon tail */
+.pet-ribbon {
+  position: absolute;
+  bottom: -12%;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+  transition: transform 400ms ease, opacity 400ms ease;
+}
+
+/* ── Mood animations (transform + opacity only) ── */
+
+/* sleeping: gentle breathing */
+@keyframes pet-breathe {
+  0%, 100% { transform: scale(1); }
+  50%       { transform: scale(0.96); }
+}
+/* idle: occasional blink handled via SVG opacity keyframe */
+@keyframes pet-blink {
+  0%, 90%, 100% { opacity: 1; }
+  93%, 97%      { opacity: 0; }
+}
+/* grooving: bob */
+@keyframes pet-bob {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25%      { transform: translateY(-6%) rotate(-3deg); }
+  75%      { transform: translateY(-3%) rotate(3deg); }
+}
+/* grooving variant 1: sway */
+@keyframes pet-sway {
+  0%, 100% { transform: rotate(-6deg); }
+  50%      { transform: rotate(6deg); }
+}
+/* grooving variant 2: bounce */
+@keyframes pet-bounce {
+  0%, 100% { transform: translateY(0) scaleY(1); }
+  40%      { transform: translateY(-10%) scaleY(1.04); }
+  60%      { transform: translateY(0) scaleY(0.96); }
+}
+/* grooving variant 3: spin sway */
+@keyframes pet-spin-sway {
+  0%, 100% { transform: rotate(-4deg) translateX(-2%); }
+  50%      { transform: rotate(4deg) translateX(2%); }
+}
+/* perk: snap to attention */
+@keyframes pet-perk {
+  0%   { transform: scale(1); }
+  20%  { transform: scale(1.12) translateY(-5%); }
+  50%  { transform: scale(1.08) translateY(-4%); }
+  100% { transform: scale(1); }
+}
+/* celebrate: hop */
+@keyframes pet-hop {
+  0%, 100% { transform: translateY(0) scaleX(1) scaleY(1); }
+  20%      { transform: translateY(-18%) scaleX(0.94) scaleY(1.06); }
+  40%      { transform: translateY(-20%) scaleX(0.92) scaleY(1.08); }
+  60%      { transform: translateY(-6%) scaleX(1.0) scaleY(1.0); }
+  80%      { transform: translateY(0) scaleX(1.06) scaleY(0.94); }
+}
+/* happy: squish */
+@keyframes pet-squish {
+  0%, 100% { transform: scale(1); }
+  20%      { transform: scaleX(1.18) scaleY(0.85); }
+  50%      { transform: scaleX(0.9) scaleY(1.12); }
+  70%      { transform: scaleX(1.08) scaleY(0.94); }
+}
+/* carried: dangle */
+@keyframes pet-dangle {
+  0%, 100% { transform: rotate(-4deg); }
+  50%      { transform: rotate(4deg); }
+}
+/* focused: calm breathing, slower */
+@keyframes pet-focus-breathe {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(0.97); }
+}
+/* break: stretch */
+@keyframes pet-stretch {
+  0%, 100% { transform: scaleX(1) scaleY(1); }
+  40%      { transform: scaleX(1.12) scaleY(0.9); }
+  70%      { transform: scaleX(0.94) scaleY(1.06); }
+}
+
+/* Sparkles (happy mood) */
+.pet-sparkle {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0;
+  animation: pet-sparkle-pop 600ms ease forwards;
+}
+@keyframes pet-sparkle-pop {
+  0%   { opacity: 0; transform: scale(0) translate(0,0); }
+  30%  { opacity: 1; transform: scale(1.4) translate(var(--dx), var(--dy)); }
+  100% { opacity: 0; transform: scale(0.8) translate(calc(var(--dx)*1.8), calc(var(--dy)*1.8)); }
+}
+
+/* Z floater above sleeping orb */
+.pet-z {
+  position: absolute;
+  top: 2%;
+  right: 10%;
+  font-size: 0.55em;
+  font-weight: 700;
+  opacity: 0;
+  animation: pet-z-float 3s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes pet-z-float {
+  0%   { opacity: 0; transform: translate(0, 0) scale(0.7); }
+  25%  { opacity: 0.8; }
+  70%  { opacity: 0.6; transform: translate(6px, -14px) scale(1); }
+  100% { opacity: 0; transform: translate(10px, -22px) scale(0.6); }
+}
+.pet-z:nth-child(2) { animation-delay: 1s; font-size: 0.42em; right: 5%; }
+.pet-z:nth-child(3) { animation-delay: 2s; font-size: 0.3em; right: 2%; }
+
+/* Respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .pet-orb * { animation: none !important; transition: opacity 400ms ease !important; }
+}

@@ -26,6 +26,15 @@ SHOTS = [
     ("11-music-compact", "playing", ["(()=>{})()", CLICK_PILL]),
 ]
 
+# Pet mood screenshots — rendered from /pet.html?mood=<mood>&size=medium
+PET_MOODS = ["sleeping", "idle", "grooving", "perk", "focused", "break", "celebrate", "happy", "carried"]
+PET_SHOTS = [
+    (f"pet-{m}", f"pet:{m}", [])
+    for m in PET_MOODS
+]
+
+ALL_SHOTS = SHOTS + PET_SHOTS
+
 win = Gtk.OffscreenWindow(); win.set_default_size(W, H)
 view = WebKit2.WebView(); view.set_size_request(W, H)
 view.set_background_color(__import__("gi").repository.Gdk.RGBA(0, 0, 0, 0))
@@ -33,9 +42,13 @@ win.add(view); win.show_all()
 state = {"i": 0}
 
 def next_shot():
-    if state["i"] >= len(SHOTS): Gtk.main_quit(); return False
-    name, scenario, steps = SHOTS[state["i"]]
-    view.load_uri(f"{BASE}/?scenario={scenario}")
+    if state["i"] >= len(ALL_SHOTS): Gtk.main_quit(); return False
+    name, scenario, steps = ALL_SHOTS[state["i"]]
+    if scenario.startswith("pet:"):
+        mood = scenario[4:]
+        view.load_uri(f"{BASE}/pet.html?mood={mood}&size=medium&scenario=playing")
+    else:
+        view.load_uri(f"{BASE}/?scenario={scenario}")
     state["cur"] = (name, steps)
     return False
 

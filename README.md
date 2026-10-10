@@ -19,9 +19,10 @@ complements the one you already use.
 - Clock, date and a focus timer (Pomodoro) in a compact second view
 - Settings: theme, size, animation, home position (and drag anywhere), open on hover, idle behaviour, launch with Windows
 - Tray icon (show/hide, settings, quit), single instance, remembers position and preferences, multi-monitor and DPI aware
+- Desktop companion pet: lightweight, quiet floating orb that grooves to music, naps when idle, celebrates focus timer completions, follows cursor, and can be positioned anywhere
 - Graceful states: paused, stopped, no player, missing metadata/artwork/timeline, media service unavailable
 
-After the MVP is solid: desktop pet, more focus tools, music history, custom animations. See *Roadmap*.
+After the MVP is solid: more focus tools, music history, custom animations. See *Roadmap*.
 
 ## Layout
 
@@ -32,7 +33,8 @@ src-tauri/          Tauri 2 glue: window, tray, commands, startup
   src/media/smtc.rs   Windows media-session bridge (the only Windows-specific media code)
   src/platform.rs     the few OS calls Tauri doesn't wrap (non-activating window)
 src/                React + TypeScript UI. Talks to Rust only via src/lib/backend.ts
-  dev/preview.ts      browser-only simulator (clearly labelled on screen, never used in the app)
+  pet/              desktop companion window bundle (standalone entry point and SVG sprite)
+  dev/preview.ts    browser-only simulator (clearly labelled on screen, never used in the app)
 docs/               ASSESSMENT.md (reference review), WINDOWS-TESTING.md (manual checklist)
 ```
 
@@ -126,8 +128,8 @@ Built and checked in a Linux sandbox without a Windows machine:
 
 ## Roadmap (after the MVP is reliable)
 
-1. Music history (SQLite, only now that there is data worth keeping)
-2. Desktop pet that reacts to playback
+1. Desktop pet that reacts to playback and focus (Completed)
+2. Music history (SQLite, only now that there is data worth keeping)
 3. Focus tools: session log, ambient presets
 4. Custom animations / themes
 5. Audio-reactive visualizer, native backdrop blur, macOS/Linux media bridges

@@ -9,6 +9,7 @@ use std::time::Instant;
 use luma_core::artwork::ArtworkCache;
 use luma_core::media::MediaState;
 use luma_core::settings::Settings;
+use serde::{Deserialize, Serialize};
 
 use crate::media::MediaHandle;
 
@@ -26,6 +27,16 @@ pub struct WinState {
     pub shown: bool,
 }
 
+/// Bookkeeping for the pet window.
+pub struct PetWinState {
+    pub expected_pos: Option<(i32, i32)>,
+    pub last_user_move: Option<Instant>,
+    pub settling: bool,
+    pub shown: bool,
+    /// The user explicitly hid the pet from the tray.
+    pub user_hidden: bool,
+}
+
 pub struct Visibility {
     /// The user hid Luma from the tray.
     pub user_hidden: bool,
@@ -35,12 +46,29 @@ pub struct Visibility {
     pub force_visible: bool,
 }
 
+/// Last known focus timer state, published by the island and consumed by the pet.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FocusStatePayload {
+    pub phase: String,
+    pub running: bool,
+    pub ends_at_ms: u64,
+}
+
+impl Default for FocusStatePayload {
+    fn default() -> Self {
+        Self { phase: "focus".into(), running: false, ends_at_ms: 0 }
+    }
+}
+
 pub struct AppState {
     pub settings: Mutex<Settings>,
     pub settings_path: PathBuf,
     pub artwork: Arc<Mutex<ArtworkCache>>,
     pub last_media: Mutex<MediaState>,
     pub win: Mutex<WinState>,
+    pub pet_win: Mutex<PetWinState>,
+    pub last_focus: Mutex<FocusStatePayload>,
     pub vis: Mutex<Visibility>,
     /// Set once, after the state is managed, so the first media event can find it.
     pub media: OnceLock<MediaHandle>,
@@ -61,6 +89,14 @@ impl AppState {
                 settling: false,
                 shown: false,
             }),
+            pet_win: Mutex::new(PetWinState {
+                expected_pos: None,
+                last_user_move: None,
+                settling: false,
+                shown: false,
+                user_hidden: false,
+            }),
+            last_focus: Mutex::new(FocusStatePayload::default()),
             vis: Mutex::new(Visibility { user_hidden: false, has_player: false, force_visible: false }),
             media: OnceLock::new(),
             quitting: AtomicBool::new(false),

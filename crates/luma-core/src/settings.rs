@@ -102,6 +102,51 @@ fn default_pause_delay() -> u32 {
     8
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum PetSize {
+    /// 72 logical px sprite
+    Small,
+    /// 96 logical px sprite
+    #[default]
+    Medium,
+    /// 128 logical px sprite
+    Large,
+}
+
+impl PetSize {
+    pub fn logical_px(self) -> u32 {
+        match self {
+            PetSize::Small => 72,
+            PetSize::Medium => 96,
+            PetSize::Large => 128,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct PetSettings {
+    pub enabled: bool,
+    pub size: PetSize,
+    pub reacts_to_music: bool,
+    pub reacts_to_focus: bool,
+    /// Where the pet window was last dragged. None = default bottom-right.
+    pub custom_anchor: Option<CustomAnchor>,
+}
+
+impl Default for PetSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            size: PetSize::default(),
+            reacts_to_music: true,
+            reacts_to_focus: true,
+            custom_anchor: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -126,6 +171,8 @@ pub struct Settings {
     pub show_seconds: bool,
     #[serde(default = "default_pause_delay")]
     pub pause_delay_secs: u32,
+    #[serde(default)]
+    pub pet: PetSettings,
 }
 
 impl Default for Settings {
@@ -146,6 +193,7 @@ impl Default for Settings {
             clock_format: ClockFormat::default(),
             show_seconds: false,
             pause_delay_secs: 8,
+            pet: PetSettings::default(),
         }
     }
 }
@@ -168,6 +216,11 @@ impl Settings {
         }
         if self.position == Position::Custom && self.custom_anchor.is_none() {
             self.position = Position::TopCenter;
+        }
+        if let Some(a) = &self.pet.custom_anchor {
+            if !(a.center_x.is_finite() && a.top_y.is_finite()) {
+                self.pet.custom_anchor = None;
+            }
         }
     }
 }
@@ -237,6 +290,11 @@ mod tests {
         assert_eq!(s.clock_format, ClockFormat::H24);
         assert!(!s.show_seconds);
         assert_eq!(s.pause_delay_secs, 8);
+        assert!(!s.pet.enabled);
+        assert_eq!(s.pet.size, PetSize::Medium);
+        assert!(s.pet.reacts_to_music);
+        assert!(s.pet.reacts_to_focus);
+        assert!(s.pet.custom_anchor.is_none());
     }
 
     #[test]
@@ -266,6 +324,15 @@ mod tests {
         });
         s.position = Position::Custom;
         s.focus.focus_min = 50;
+        s.pet.enabled = true;
+        s.pet.size = PetSize::Large;
+        s.pet.custom_anchor = Some(CustomAnchor {
+            monitor_name: "DELL".into(),
+            monitor_x: -2560,
+            monitor_y: 0,
+            center_x: 1400.0,
+            top_y: 780.0,
+        });
         save(&path, &s).unwrap();
         let (back, outcome) = load(&path);
         assert_eq!(outcome, LoadOutcome::Loaded);
@@ -286,6 +353,9 @@ mod tests {
         assert_eq!(s.clock_format, ClockFormat::H24);
         assert!(!s.show_seconds);
         assert_eq!(s.pause_delay_secs, 8);
+        // Old file had no pet field: defaults must apply.
+        assert!(!s.pet.enabled);
+        assert_eq!(s.pet.size, PetSize::Medium);
     }
 
     #[test]

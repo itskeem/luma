@@ -63,6 +63,7 @@ export type Animation = "off" | "subtle" | "full";
 export type PositionPreset = "top-center" | "top-left" | "top-right" | "custom";
 export type IdleBehavior = "off" | "dim" | "hide";
 export type ClockFormat = "24h" | "12h";
+export type PetSize = "small" | "medium" | "large";
 
 export interface FocusSettings {
   focusMin: number;
@@ -70,6 +71,14 @@ export interface FocusSettings {
   longBreakMin: number;
   roundsBeforeLong: number;
   autoStartNext: boolean;
+}
+
+export interface PetSettings {
+  enabled: boolean;
+  size: PetSize;
+  reactsToMusic: boolean;
+  reactsToFocus: boolean;
+  customAnchor: unknown;
 }
 
 export interface Settings {
@@ -88,6 +97,7 @@ export interface Settings {
   clockFormat: ClockFormat;
   showSeconds: boolean;
   pauseDelaySecs: number;
+  pet: PetSettings;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -106,4 +116,6 @@ export const DEFAULT_SETTINGS: Settings = {
   clockFormat: "24h",
   showSeconds: false,
   pauseDelaySecs: 8,
+  pet: { enabled: false, size: "medium", reactsToMusic: true, reactsToFocus: true, customAnchor: null },
 };
+

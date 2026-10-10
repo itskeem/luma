@@ -42,6 +42,12 @@ export default function App() {
   const timer = useFocusTimer(settings.focus, (phase) => island.showMessage(FINISHED_TEXT[phase]));
   const liveClock = useLiveClock(settings.clockFormat, settings.showSeconds);
 
+  // Publish focus state to the pet window whenever phase/running/endsAtMs changes.
+  useEffect(() => {
+    const endsAtMs = timer.running ? Date.now() + timer.remainingMs : 0;
+    backend.publishFocusState({ phase: timer.phase, running: timer.running, endsAtMs });
+  }, [backend, timer.phase, timer.running, timer.remainingMs]);
+
   const expanded = isExpanded(island.view);
   const position = usePosition(active, island.view === "music");
   const timerInPill = timer.running && island.view === "collapsed";

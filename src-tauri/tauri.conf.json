@@ -35,6 +35,26 @@
         "minimizable": false,
         "closable": false,
         "dragDropEnabled": false
+      },
+      {
+        "label": "pet",
+        "title": "Luma Pet",
+        "url": "pet.html",
+        "width": 144,
+        "height": 144,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "focus": false,
+        "visible": false,
+        "center": false,
+        "maximizable": false,
+        "minimizable": false,
+        "closable": false,
+        "dragDropEnabled": false
       }
     ]
   },
