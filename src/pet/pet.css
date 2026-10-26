@@ -1,0 +1,257 @@
+/* Pet UI: the floating window's quick menu, the island bubble and the Pet panel. */
+
+.pet-menu {
+	position: absolute;
+	left: 50%;
+	bottom: 4px;
+	transform: translateX(-50%);
+	display: flex;
+	gap: 6px;
+	padding: 5px;
+	border-radius: 999px;
+	background: rgba(24, 18, 40, 0.88);
+	border: 1px solid rgba(255, 255, 255, 0.12);
+	box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+	animation: pet-menu-in 160ms cubic-bezier(0.2, 1.2, 0.4, 1);
+}
+
+.pet-menu button {
+	all: unset;
+	box-sizing: border-box;
+	width: 28px;
+	height: 28px;
+	border-radius: 50%;
+	display: grid;
+	place-items: center;
+	color: #f4eefc;
+	cursor: pointer;
+	transition: background 120ms, transform 120ms;
+}
+
+.pet-menu button:hover {
+	background: rgba(255, 255, 255, 0.16);
+	transform: scale(1.08);
+}
+
+.pet-menu button:focus-visible {
+	outline: 2px solid #ffc48a;
+}
+
+@keyframes pet-menu-in {
+	from {
+		opacity: 0;
+		transform: translateX(-50%) translateY(6px) scale(0.9);
+	}
+}
+
+/* Island: the pet's bubble beside the collapsed pill (shape and colours come
+   from .activity-bubble; Lumi may peek slightly past its edges). */
+.activity-bubble.pet-bubble {
+	width: 36px;
+	overflow: visible;
+	cursor: pointer;
+}
+
+.activity-bubble.pet-bubble canvas {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	transform: translate(-50%, -52%);
+}
+
+/* Island: the Pet panel. */
+.pet-panel {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	width: 100%;
+	height: 100%;
+	box-sizing: border-box;
+	padding: 4px 20px 12px;
+	color: #f4eefc;
+}
+
+.pet-panel-stage {
+	flex: none;
+	width: 100px;
+	height: 100px;
+	border-radius: 22px;
+	background: radial-gradient(circle at 50% 45%, rgba(255, 196, 138, 0.14), rgba(255, 255, 255, 0.03) 70%);
+	display: grid;
+	place-items: center;
+}
+
+.pet-panel-info {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.pet-panel-name {
+	font-size: 15px;
+	font-weight: 650;
+	letter-spacing: 0.01em;
+}
+
+.pet-panel-mood {
+	font-size: 11.5px;
+	opacity: 0.72;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.pet-hearts {
+	display: flex;
+	gap: 3px;
+}
+
+.pet-heart {
+	width: 11px;
+	height: 11px;
+	opacity: 0.22;
+	transition: opacity 300ms, transform 300ms;
+}
+
+.pet-heart.on {
+	opacity: 1;
+	transform: scale(1.05);
+}
+
+.pet-actions {
+	display: flex;
+	gap: 6px;
+	margin-top: 2px;
+	flex-wrap: wrap;
+}
+
+.pet-action {
+	all: unset;
+	box-sizing: border-box;
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	height: 26px;
+	padding: 0 11px;
+	border-radius: 999px;
+	font-size: 11.5px;
+	font-weight: 550;
+	background: rgba(255, 255, 255, 0.1);
+	color: #f4eefc;
+	cursor: pointer;
+	transition: background 120ms, transform 120ms;
+}
+
+.pet-action:hover {
+	background: rgba(255, 255, 255, 0.18);
+}
+
+.pet-action:active {
+	transform: scale(0.96);
+}
+
+.pet-action:focus-visible {
+	outline: 2px solid #ffc48a;
+}
+
+/* Settings: swatches and outfit chips. */
+.pet-swatches {
+	display: flex;
+	gap: 8px;
+}
+
+.pet-swatch {
+	all: unset;
+	box-sizing: border-box;
+	width: 22px;
+	height: 22px;
+	border-radius: 50%;
+	cursor: pointer;
+	border: 2px solid transparent;
+	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+	transition: transform 120ms;
+}
+
+.pet-swatch:hover {
+	transform: scale(1.12);
+}
+
+.pet-swatch.active {
+	border-color: #fff;
+}
+
+.pet-swatch:focus-visible {
+	outline: 2px solid #ffc48a;
+	outline-offset: 2px;
+}
+
+.pet-chip-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	justify-content: flex-end;
+}
+
+.pet-chip {
+	all: unset;
+	box-sizing: border-box;
+	padding: 4px 10px;
+	border-radius: 999px;
+	font-size: 11px;
+	cursor: pointer;
+	background: rgba(255, 255, 255, 0.08);
+	color: inherit;
+	border: 1px solid transparent;
+}
+
+.pet-chip:hover {
+	background: rgba(255, 255, 255, 0.16);
+}
+
+.pet-chip.active {
+	border-color: rgba(255, 255, 255, 0.75);
+	background: rgba(255, 255, 255, 0.18);
+}
+
+.pet-chip:focus-visible {
+	outline: 2px solid #ffc48a;
+}
+
+.pet-preview {
+	display: grid;
+	place-items: center;
+	height: 150px;
+	margin: 8px 0 4px;
+	border-radius: 14px;
+	background: rgba(255, 255, 255, 0.04);
+}
+
+.pet-name-input {
+	all: unset;
+	box-sizing: border-box;
+	width: 130px;
+	height: 26px;
+	padding: 0 10px;
+	border-radius: 8px;
+	background: rgba(255, 255, 255, 0.08);
+	font-size: 12px;
+	text-align: right;
+	color: inherit;
+}
+
+.pet-name-input:focus {
+	outline: 2px solid #ffc48a;
+}
+
+.pet-range {
+	width: 130px;
+	accent-color: #ffb08a;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.pet-menu {
+		animation: none;
+	}
+}
