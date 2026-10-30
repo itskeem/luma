@@ -1,10 +1,13 @@
-import { Bed, Eye, Gauge, Home, Monitor, Music, PawPrint, Ruler, Shirt, Sparkles, Timer, Type, Layers, Maximize } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Bed, Eye, Gauge, Home, Monitor, Music, PawPrint, Ruler, Shirt, Sparkles, Timer, Type, Layers, Maximize, Heart, Download, Upload } from "lucide-react";
 import { SettingRow } from "./SettingRow";
 import { PetCanvas } from "../pet/PetCanvas";
 import { sendPetCommand } from "../pet/bus";
 import { PALETTES } from "../pet/palette";
-import { SIZE_MAX, SIZE_MIN, SLEEP_AFTER_CHOICES, updatePrefs, usePetPrefs } from "../pet/prefs";
+import { getPrefs, getState, SIZE_MAX, SIZE_MIN, SLEEP_AFTER_CHOICES, updatePrefs, updateState, usePetPrefs } from "../pet/prefs";
 import { PET_COLORS, PET_OUTFITS, type PetOutfit } from "../pet/types";
+import { getBrain } from "../pet/brainStore";
+import { heartsFor, bondLabel } from "../pet/mood";
 import "../pet/pet.css";
 
 const OUTFIT_LABELS: Record<PetOutfit, string> = {
@@ -13,7 +16,10 @@ const OUTFIT_LABELS: Record<PetOutfit, string> = {
 	partyHat: "Party hat",
 	glasses: "Glasses",
 	headphones: "Headphones",
-	scarf: "Scarf"
+	scarf: "Scarf",
+	crown: "Crown",
+	cape: "Cape",
+	sunglasses: "Sunglasses"
 };
 
 const sleepLabel = (m: number) => (m === 0 ? "Never" : `${m} min`);
@@ -25,6 +31,76 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: 
 			<span className="slider"></span>
 		</label>
 	);
+}
+
+/** Affection meter: 5 hearts that fill based on the current affection level. */
+function AffectionMeter() {
+	const [info, setInfo] = useState({ hearts: 0, affection: 0, interactions: 0, tier: "" });
+
+	useEffect(() => {
+		const read = () => {
+			try {
+				const brain = getBrain();
+				const v = brain.peek();
+				const snap = brain.snapshot();
+				setInfo({
+					hearts: heartsFor(v.affection),
+					affection: Math.round(v.affection * 100),
+					interactions: snap.totalInteractions,
+					tier: bondLabel(snap.totalInteractions)
+				});
+			} catch {
+				/* brain may not be ready yet */
+			}
+		};
+		read();
+		const id = setInterval(read, 1000);
+		return () => clearInterval(id);
+	}, []);
+
+	return (
+		<div className="pet-affection-meter">
+			<div className="pet-affection-hearts" title={`Affection: ${info.affection}%`}>
+				{[0, 1, 2, 3, 4].map((i) => (
+					<Heart key={i} size={14} className={`pet-affection-heart ${i < info.hearts ? "filled" : ""}`} />
+				))}
+				<span className="pet-affection-pct">{info.affection}%</span>
+			</div>
+			<div className="pet-affection-bond">
+				{info.tier} · {info.interactions} interactions
+			</div>
+		</div>
+	);
+}
+
+/** Export prefs + state as JSON to clipboard; import from clipboard. */
+async function exportPrefs() {
+	const data = JSON.stringify({ prefs: getPrefs(), state: getState() }, null, 2);
+	try {
+		await navigator.clipboard.writeText(data);
+		alert("Pet settings copied to clipboard ✓");
+	} catch {
+		prompt("Copy this JSON:", data);
+	}
+}
+
+async function importPrefs() {
+	let text: string;
+	try {
+		text = await navigator.clipboard.readText();
+	} catch {
+		const input = prompt("Paste pet settings JSON:");
+		if (!input) return;
+		text = input;
+	}
+	try {
+		const data = JSON.parse(text);
+		if (data?.prefs) updatePrefs(data.prefs);
+		if (data?.state) updateState(data.state);
+		alert("Pet settings imported ✓");
+	} catch {
+		alert("Invalid JSON — couldn't import settings.");
+	}
 }
 
 export function PetTab() {
@@ -55,6 +131,17 @@ export function PetTab() {
 					/>
 				</SettingRow>
 			</div>
+
+			{prefs.enabled && (
+				<>
+					<div className="setting-group-label setting-group-label--spaced">Bond</div>
+					<div className="setting-group">
+						<SettingRow icon={Heart} label="Affection" desc="How much Lumi likes you" divider={false}>
+							<AffectionMeter />
+						</SettingRow>
+					</div>
+				</>
+			)}
 
 			<div className="setting-group-label setting-group-label--spaced">Appearance</div>
 			<div className="setting-group">
@@ -161,6 +248,12 @@ export function PetTab() {
 				<SettingRow icon={Maximize} label="Step aside for fullscreen apps" desc="Hides the desktop pet behind games and videos" divider={false}>
 					<Toggle label="Step aside for fullscreen apps" checked={prefs.hideInFullscreen} onChange={(hideInFullscreen) => updatePrefs({ hideInFullscreen })} />
 				</SettingRow>
+			</div>
+
+			<div className="setting-group-label setting-group-label--spaced">Data</div>
+			<div className="setting-group">
+				<SettingRow icon={Download} label="Export settings" desc="Copy all pet settings and state as JSON" action onClick={exportPrefs} />
+				<SettingRow icon={Upload} label="Import settings" desc="Paste previously exported JSON from clipboard" action divider={false} onClick={importPrefs} />
 			</div>
 		</>
 	);

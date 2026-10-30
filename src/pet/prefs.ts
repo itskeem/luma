@@ -57,9 +57,13 @@ export interface PetState {
 	/** Last floating position in physical desktop pixels (top-left of the window). */
 	x: number | null;
 	y: number | null;
+	/** Running count of meaningful interactions (pokes, strokes, feeds). */
+	totalInteractions: number;
+	/** Bitmask of which bond milestones have already been celebrated. */
+	milestonesReached: number;
 }
 
-export const DEFAULT_STATE: PetState = { affection: 0.3, lastSeen: 0, x: null, y: null };
+export const DEFAULT_STATE: PetState = { affection: 0.3, lastSeen: 0, x: null, y: null, totalInteractions: 0, milestonesReached: 0 };
 
 export function normalizeState(raw: unknown): PetState {
 	const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
@@ -68,7 +72,9 @@ export function normalizeState(raw: unknown): PetState {
 		affection: clamp(num(r.affection, DEFAULT_STATE.affection), 0, 1),
 		lastSeen: Math.max(0, num(r.lastSeen, 0)),
 		x: coord(r.x),
-		y: coord(r.y)
+		y: coord(r.y),
+		totalInteractions: Math.max(0, Math.round(num(r.totalInteractions, 0))),
+		milestonesReached: Math.max(0, Math.round(num(r.milestonesReached, 0)))
 	};
 }
 

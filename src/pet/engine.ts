@@ -20,15 +20,16 @@ import type { Expression, PetPrefs, PetView } from "./types";
 
 /** Face targets for each expression; everything else eases toward these. */
 const FACES: Record<Expression, FaceParams> = {
-	neutral: { ...NEUTRAL_FACE },
-	happy: { ...NEUTRAL_FACE, eyeArc: 0.9, mouthOpen: 0.6, mouthCurve: 1, cheek: 0.9 },
-	excited: { ...NEUTRAL_FACE, eyeOpen: 1.15, eyeArc: 0.35, mouthOpen: 0.85, mouthCurve: 1, cheek: 0.85, pupil: 1.2 },
-	curious: { ...NEUTRAL_FACE, eyeOpen: 1.1, brow: 0.9, mouthOpen: 0.15, mouthCurve: 0.1, cheek: 0.3, pupil: 1.1 },
-	sleepy: { ...NEUTRAL_FACE, eyeOpen: 0.5, lidDroop: 0.6, mouthOpen: 0.3, mouthCurve: 0, cheek: 0.45, pupil: 0.8 },
-	surprised: { ...NEUTRAL_FACE, eyeOpen: 1.3, mouthOpen: 1, mouthCurve: 0, cheek: 0.2, pupil: 0.7 },
-	annoyed: { ...NEUTRAL_FACE, eyeOpen: 0.75, lidTilt: 0.9, mouthCurve: -0.8, cheek: 0.1, pupil: 0.9 },
-	dizzy: { ...NEUTRAL_FACE, spiral: 1, mouthCurve: -0.2, mouthOpen: 0.25, cheek: 0.4 },
-	worried: { ...NEUTRAL_FACE, eyeOpen: 1.1, lidTilt: -0.75, mouthCurve: -0.55, mouthOpen: 0.2, cheek: 0.15, pupil: 1.1 }
+	neutral:  { ...NEUTRAL_FACE },
+	happy:    { ...NEUTRAL_FACE, eyeArc: 0.9, mouthOpen: 0.6, mouthCurve: 1, cheek: 0.9 },
+	excited:  { ...NEUTRAL_FACE, eyeOpen: 1.15, eyeArc: 0.35, mouthOpen: 0.85, mouthCurve: 1, cheek: 0.85, pupil: 1.2 },
+	curious:  { ...NEUTRAL_FACE, eyeOpen: 1.1, brow: 0.9, mouthOpen: 0.15, mouthCurve: 0.1, cheek: 0.3, pupil: 1.1 },
+	sleepy:   { ...NEUTRAL_FACE, eyeOpen: 0.5, lidDroop: 0.6, mouthOpen: 0.3, mouthCurve: 0, cheek: 0.45, pupil: 0.8 },
+	surprised:{ ...NEUTRAL_FACE, eyeOpen: 1.3, mouthOpen: 1, mouthCurve: 0, cheek: 0.2, pupil: 0.7 },
+	annoyed:  { ...NEUTRAL_FACE, eyeOpen: 0.75, lidTilt: 0.9, mouthCurve: -0.8, cheek: 0.1, pupil: 0.9 },
+	dizzy:    { ...NEUTRAL_FACE, spiral: 1, mouthCurve: -0.2, mouthOpen: 0.25, cheek: 0.4 },
+	worried:  { ...NEUTRAL_FACE, eyeOpen: 1.1, lidTilt: -0.75, mouthCurve: -0.55, mouthOpen: 0.2, cheek: 0.15, pupil: 1.1 },
+	bored:    { ...NEUTRAL_FACE, eyeOpen: 0.65, lidDroop: 0.45, mouthOpen: 0.55, mouthCurve: -0.2, cheek: 0.15, pupil: 0.85 }
 };
 
 const ASLEEP_FACE: FaceParams = { ...NEUTRAL_FACE, closedArc: 1, mouthOpen: 0.25, mouthCurve: 0, cheek: 0.5 };
@@ -88,6 +89,7 @@ export class PetEngine {
 	private activityStart = 0;
 	private lastActivity = "idle";
 	private dancePhase = 0;
+	private spinAngle = 0;
 	private audio = 0;
 	private audioSmooth = 0;
 	private audioAt = -Infinity;
@@ -248,7 +250,9 @@ export class PetEngine {
 			this.activityStart = this.t;
 			if (view.activity === "jump") this.hop(70 * (0.7 + 0.3 * lively));
 			if (view.activity === "celebrate") this.hop(95);
+			if (view.activity === "spin") this.spinAngle = 0;
 			if (view.expression === "surprised" && view.activity !== "jump") this.squashVel -= 3;
+			if (view.expression === "bored") this.squashVel -= 0.5; // subtle slump
 		}
 		if (view.activity !== this.lastActivity) {
 			if (view.activity === "dance") this.dancePhase = 0;
@@ -355,6 +359,30 @@ export class PetEngine {
 			case "lookaround":
 				// Handled in stepGaze.
 				break;
+			case "spin": {
+				// Full 360° rotation using tilt spring; two hops at 0° and 180°.
+				const spinSpeed = 3.5 * lively;
+				this.spinAngle += dt * spinSpeed;
+				tilt = Math.sin(this.spinAngle) * Math.PI * 0.28;
+				squashTarget = 1 + 0.06 * Math.abs(Math.cos(this.spinAngle));
+				armL = 1.2 + Math.cos(this.spinAngle + 1) * 0.5;
+				armR = 1.2 + Math.cos(this.spinAngle - 1) * 0.5;
+				if (this.grounded && Math.abs(Math.sin(this.spinAngle)) < 0.08 && since > 0.1) {
+					this.hop(55 * lively);
+				}
+				break;
+			}
+			case "peek": {
+				// Lumi leans/slides sideways to peek, then returns.
+				const peekU = Math.min(1, since / 2.0);
+				const peekBell = Math.sin(peekU * Math.PI);
+				tilt = -0.22 * peekBell;
+				squashTarget = 1 + 0.05 * peekBell;
+				armL = 0.35;
+				armR = 0.35 + peekBell * 0.6;
+				glow = 0.55 + peekBell * 0.2;
+				break;
+			}
 			default:
 				break;
 		}
@@ -399,12 +427,15 @@ export class PetEngine {
 		p.footL += (footL - p.footL) * (1 - Math.exp(-dt * 20));
 		p.footR += (footR - p.footR) * (1 - Math.exp(-dt * 20));
 
-		// Sleepy zzz.
+		// Sleepy zzz with snore cheek puff.
 		if (view.asleep) {
 			this.zzzTimer -= dt;
 			if (this.zzzTimer <= 0) {
-				this.zzzTimer = 2.4;
+				this.zzzTimer = 2.6;
 				this.spawn("zzz");
+				// Puff cheeks briefly to simulate a snore breath.
+				p.face.mouthOpen = Math.max(p.face.mouthOpen, 0.55);
+				p.face.cheek = Math.max(p.face.cheek, 0.65);
 			}
 		}
 
@@ -452,10 +483,14 @@ export class PetEngine {
 		if (view.asleep) {
 			tx = 0;
 			ty = 0.3;
-		} else if (view.activity === "lookaround") {
+		} else if (view.activity === "lookaround" || view.activity === "peek") {
 			const u = this.t - this.activityStart;
 			tx = Math.sin(u * 2.6) * 0.95;
 			ty = -0.1 + Math.sin(u * 1.3) * 0.15;
+		} else if (view.expression === "bored") {
+			// Downcast gaze when bored.
+			tx = Math.sin(this.t * 0.4) * 0.3;
+			ty = 0.5;
 		} else if (view.activity === "dance") {
 			tx = Math.sin(this.dancePhase * 0.5) * 0.4;
 			ty = -0.1;
@@ -514,6 +549,19 @@ export class PetEngine {
 						size: 5 + Math.random() * 4,
 						max: 1.5 + Math.random() * 0.6,
 						color: i % 2 ? "#ff7aa0" : "#ff5f86"
+					});
+				break;
+			case "treat":
+				for (let i = 0; i < Math.min(room, 6); i++)
+					add({
+						kind: "sparkle",
+						x: 50 + (Math.random() - 0.5) * 40,
+						y: 50 + Math.random() * 14,
+						vx: (Math.random() - 0.5) * 22,
+						vy: -28 - Math.random() * 20,
+						size: 4 + Math.random() * 3,
+						max: 1.0 + Math.random() * 0.5,
+						color: ["#ffd700", "#ffb347", "#ff6eb4", "#7fffd4"][i % 4]
 					});
 				break;
 			case "confetti":

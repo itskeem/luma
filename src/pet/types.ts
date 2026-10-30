@@ -10,7 +10,8 @@ export type Expression =
 	| "surprised"
 	| "annoyed"
 	| "dizzy"
-	| "worried";
+	| "worried"
+	| "bored";
 
 export type Activity =
 	| "idle"
@@ -21,13 +22,15 @@ export type Activity =
 	| "wave"
 	| "celebrate"
 	| "stretch"
-	| "lookaround";
+	| "lookaround"
+	| "spin"
+	| "peek";
 
 /** Where Lumi lives right now. */
 export type PetHome = "island" | "desktop";
 
 /** One-shot visual effects the brain asks the renderer to spawn. */
-export type EffectKind = "hearts" | "confetti" | "zzz" | "notes" | "anger" | "stars" | "sparkle";
+export type EffectKind = "hearts" | "confetti" | "zzz" | "notes" | "anger" | "stars" | "sparkle" | "treat";
 
 export type PetEvent =
 	| { type: "poke" }
@@ -40,7 +43,9 @@ export type PetEvent =
 	| { type: "alert"; kind: "low-battery" | "charging" | "notification" }
 	| { type: "wave" }
 	| { type: "wake" }
-	| { type: "sleep" };
+	| { type: "sleep" }
+	| { type: "feed" }
+	| { type: "weather"; kind: "sunny" | "rainy" | "stormy" | "cloudy" | "snowy" };
 
 /** What the renderer needs from the brain on each frame. */
 export interface PetView {
@@ -80,10 +85,16 @@ export interface PetPrefs {
 	home: PetHome;
 }
 
-export const PET_COLORS = ["peach", "mint", "lavender", "sky", "rose", "lemon"] as const;
+export const PET_COLORS = [
+	"peach", "mint", "lavender", "sky", "rose", "lemon",
+	"ocean", "midnight", "cherry"
+] as const;
 export type PetColor = (typeof PET_COLORS)[number];
 
-export const PET_OUTFITS = ["none", "bow", "partyHat", "glasses", "headphones", "scarf"] as const;
+export const PET_OUTFITS = [
+	"none", "bow", "partyHat", "glasses", "headphones", "scarf",
+	"crown", "cape", "sunglasses"
+] as const;
 export type PetOutfit = (typeof PET_OUTFITS)[number];
 
 export const DEFAULT_PREFS: PetPrefs = {

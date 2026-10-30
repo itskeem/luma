@@ -15,16 +15,26 @@ export function getBrain(): PetBrain {
 	brain = new PetBrain(
 		getPrefs(),
 		{ now: () => performance.now(), rand: Math.random },
-		{ affection: state.affection, lastSeen: state.lastSeen }
+		{
+			affection: state.affection,
+			lastSeen: state.lastSeen,
+			totalInteractions: state.totalInteractions ?? 0,
+			milestonesReached: state.milestonesReached ?? 0
+		}
 	);
 	subscribePrefs((p) => brain?.setPrefs(p));
 	onPetEvent((e) => brain?.dispatch(e));
 
-	// Affection changes slowly; save it now and then and on the way out.
+	// Affection and interaction count change over time; save periodically and on exit.
 	const save = () => {
 		if (!brain) return;
 		const s = brain.snapshot();
-		if (Math.abs(s.affection - getState().affection) > 0.005) updateState(s);
+		const cur = getState();
+		const changed =
+			Math.abs(s.affection - cur.affection) > 0.005 ||
+			s.totalInteractions !== (cur.totalInteractions ?? 0) ||
+			s.milestonesReached !== (cur.milestonesReached ?? 0);
+		if (changed) updateState(s);
 	};
 	saveTimer = setInterval(save, 60_000);
 	window.addEventListener("pagehide", save);

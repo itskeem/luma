@@ -10,6 +10,8 @@
 //  * Spontaneous behaviour is rare, scaled by the intensity preference, and
 //    switched off entirely while asleep, dragged, or (optionally) focusing.
 //  * Sleep needs real inactivity and any real event wakes Lumi.
+//  * Bond milestones (100 / 500 / 1000 interactions) trigger a unique one-off
+//    celebration with confetti + sparkle.
 
 import type { Activity, EffectKind, Expression, PetEvent, PetPrefs, PetView } from "./types";
 
@@ -46,10 +48,18 @@ const AFFECTION_COOLDOWN_MS = 5000;
 const STROKE_COOLDOWN_MS = 4000;
 const SPONTANEOUS_MIN_MS = 9000;
 const SPONTANEOUS_SPAN_MS = 14000;
+/** Inactivity (ms) before Lumi looks bored — distinct from the sleep timer. */
+const BORED_AFTER_MS = 90_000;
+/** Bond milestone interaction counts that trigger a special celebration. */
+const BOND_MILESTONES = [100, 500, 1000, 2500] as const;
 
 export interface BrainSnapshot {
 	affection: number;
 	lastSeen: number;
+	/** Running total of meaningful interactions (pokes, strokes, feeds). */
+	totalInteractions: number;
+	/** Which milestones have already fired (serialised as a number bitmask). */
+	milestonesReached: number;
 }
 
 export class PetBrain {
@@ -67,8 +77,11 @@ export class PetBrain {
 	private focusActive = false;
 	private forcedSleep = false;
 	private asleep = false;
+	private boredShown = false;
 
 	private affection: number;
+	private totalInteractions: number;
+	private milestonesReached: number;
 	private effects: EffectKind[] = [];
 	private flashUntil = 0;
 	private flashStart = 0;
@@ -80,6 +93,8 @@ export class PetBrain {
 		const now = clock.now();
 		this.lastInteraction = now;
 		this.affection = clamp01(snapshot?.affection ?? 0.3);
+		this.totalInteractions = snapshot?.totalInteractions ?? 0;
+		this.milestonesReached = snapshot?.milestonesReached ?? 0;
 		this.nextSpontaneous = now + this.spontaneousDelay();
 		// Long absences cool things down a little (never below a floor).
 		if (snapshot?.lastSeen) {
@@ -96,7 +111,12 @@ export class PetBrain {
 	}
 
 	snapshot(): BrainSnapshot {
-		return { affection: this.affection, lastSeen: Date.now() };
+		return {
+			affection: this.affection,
+			lastSeen: Date.now(),
+			totalInteractions: this.totalInteractions,
+			milestonesReached: this.milestonesReached
+		};
 	}
 
 	get isAsleep() {
@@ -109,6 +129,11 @@ export class PetBrain {
 
 	get isMusicPlaying() {
 		return this.musicPlaying;
+	}
+
+	/** Current affection as a 0–5 bond level for UI display. */
+	get bondLevel(): number {
+		return Math.min(5, Math.floor(this.totalInteractions / 100));
 	}
 
 	dispatch(event: PetEvent) {
@@ -161,6 +186,12 @@ export class PetBrain {
 				this.transient = null;
 				this.fallAsleep();
 				break;
+			case "feed":
+				this.onFeed(now);
+				break;
+			case "weather":
+				this.onWeather(event.kind, now);
+				break;
 		}
 	}
 
@@ -192,8 +223,10 @@ export class PetBrain {
 
 	private onPoke(now: number) {
 		this.touch(now);
+		this.countInteraction(now);
 		const wasAsleep = this.asleep;
 		this.wakeUp();
+		this.boredShown = false;
 		this.pokes = this.pokes.filter((t) => now - t < POKE_WINDOW_MS);
 		this.pokes.push(now);
 		const count = this.pokes.length;
@@ -226,7 +259,45 @@ export class PetBrain {
 		if (this.asleep || now - this.lastStroke < STROKE_COOLDOWN_MS) return;
 		this.lastStroke = now;
 		this.touch(now);
+		this.countInteraction(now);
+		this.boredShown = false;
+		// Strokes are calming — they mildly grow affection without the cooldown.
+		this.affection = clamp01(this.affection + 0.01);
 		this.start({ expression: "curious", activity: "idle", until: now + 1500, priority: PRIORITY.idle });
+	}
+
+	private onFeed(now: number) {
+		if (this.asleep) this.wakeUp();
+		this.touch(now);
+		this.countInteraction(now);
+		this.boredShown = false;
+		// Treats give a bigger affection boost than pokes.
+		this.affection = clamp01(this.affection + 0.07);
+		this.flash(now, 1200);
+		this.effects.push("hearts", "sparkle");
+		this.start({ expression: "excited", activity: "jump", until: now + 1600, priority: PRIORITY.alert });
+	}
+
+	private onWeather(kind: "sunny" | "rainy" | "stormy" | "cloudy" | "snowy", now: number) {
+		this.touch(now);
+		this.wakeUp();
+		switch (kind) {
+			case "sunny":
+				this.effects.push("sparkle");
+				this.start({ expression: "happy", activity: "jump", until: now + 1200, priority: PRIORITY.poke });
+				break;
+			case "rainy":
+			case "stormy":
+				this.start({ expression: "worried", activity: "idle", until: now + 2500, priority: PRIORITY.poke });
+				break;
+			case "snowy":
+				this.effects.push("sparkle");
+				this.start({ expression: "excited", activity: "lookaround", until: now + 2500, priority: PRIORITY.poke });
+				break;
+			case "cloudy":
+				this.start({ expression: "neutral", activity: "lookaround", until: now + 1200, priority: PRIORITY.idle });
+				break;
+		}
 	}
 
 	private onFocus(phase: "start" | "pause" | "resume" | "reset" | "complete", now: number) {
@@ -271,6 +342,20 @@ export class PetBrain {
 
 	// ── Internals ──────────────────────────────────────────────────────────────
 
+	/** Count a meaningful interaction and fire bond milestones. */
+	private countInteraction(now: number) {
+		this.totalInteractions++;
+		const idx = BOND_MILESTONES.findIndex((m, i) => this.totalInteractions >= m && !(this.milestonesReached & (1 << i)));
+		if (idx >= 0) {
+			this.milestonesReached |= 1 << idx;
+			this.flash(now, 3000);
+			this.effects.push("confetti", "sparkle", "hearts");
+			// Override any current transient with the milestone celebration.
+			this.transient = null;
+			this.start({ expression: "excited", activity: "celebrate", until: now + 6000, priority: PRIORITY.celebrate });
+		}
+	}
+
 	private resolve(now: number): PetView {
 		let expression: Expression = "neutral";
 		let activity: Activity = "idle";
@@ -283,6 +368,17 @@ export class PetBrain {
 		} else if (this.musicPlaying && this.prefs.danceToMusic) {
 			expression = "happy";
 			activity = "dance";
+		} else {
+			// Bored: long idle with no sleep timer (so it's visible).
+			const idle = now - this.lastInteraction;
+			const sleepMs = this.prefs.sleepAfter * 60_000;
+			const nearSleep = sleepMs > 0 && idle > sleepMs * 0.8;
+			if (!nearSleep && idle > BORED_AFTER_MS && !this.boredShown) {
+				this.boredShown = true;
+				expression = "bored";
+			} else if (this.boredShown) {
+				expression = "bored";
+			}
 		}
 
 		// Dancing continues underneath short, higher-priority reactions that
@@ -318,6 +414,7 @@ export class PetBrain {
 		if (this.asleep || this.forcedSleep) {
 			this.asleep = false;
 			this.forcedSleep = false;
+			this.boredShown = false;
 			this.nextSpontaneous = this.clock.now() + this.spontaneousDelay();
 		}
 	}
@@ -325,6 +422,7 @@ export class PetBrain {
 	private fallAsleep() {
 		if (this.asleep) return;
 		this.asleep = true;
+		this.boredShown = false;
 		this.effects.push("zzz");
 	}
 
@@ -347,14 +445,18 @@ export class PetBrain {
 		if (this.musicPlaying && this.prefs.danceToMusic) return;
 
 		const roll = this.clock.rand();
-		if (roll < 0.45) {
+		if (roll < 0.35) {
 			this.start({ expression: "curious", activity: "lookaround", until: now + 2200, priority: PRIORITY.idle });
-		} else if (roll < 0.75) {
+		} else if (roll < 0.55) {
 			this.start({ expression: "neutral", activity: "stretch", until: now + 1600, priority: PRIORITY.idle });
-		} else if (roll < 0.9) {
+		} else if (roll < 0.68) {
 			this.start({ expression: "happy", activity: "jump", until: now + 800, priority: PRIORITY.idle });
-		} else {
+		} else if (roll < 0.78) {
 			this.start({ expression: "happy", activity: "wave", until: now + 1600, priority: PRIORITY.idle });
+		} else if (roll < 0.88) {
+			this.start({ expression: "excited", activity: "spin", until: now + 1200, priority: PRIORITY.idle });
+		} else {
+			this.start({ expression: "curious", activity: "peek", until: now + 2000, priority: PRIORITY.idle });
 		}
 	}
 }

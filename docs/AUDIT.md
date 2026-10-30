@@ -39,3 +39,30 @@ Luma is a personal-use Windows desktop companion: a dynamic island, an optional 
 4. The pet window can take focus when clicked; check it doesn't steal focus from typing in other apps in your setup (`focus: false` is set).
 5. Exclusive full-screen games bypass the foreground check.
 6. Unsigned installer, Windows only.
+
+## 6. Pet enhancement pass (Oct 2026)
+
+### Brain & behaviour
+- **`bored` expression** — prolonged idle (90 s) with no interaction triggers a distinct bored face, separate from the sleepy/nap timer.
+- **Weather-aware mood** — `weather` event (`sunny`/`rainy`/`stormy`/`cloudy`/`snowy`) makes Lumi react: sunny → happy jump + sparkle; rain/storm → worried; snow → excited lookaround; cloudy → neutral lookaround.
+- **`feed` / treat event** — dispatched from the Pet panel's Feed button; fast-tracks affection (+0.07) and spawns hearts + sparkle + a flash.
+- **Bond level milestones** — crossing 100 / 500 / 1000 / 2500 total interactions triggers a one-off celebration (confetti + sparkle + hearts). Milestones are stored as a bitmask in `PetState.milestonesReached`.
+- **`spin` activity** — spontaneous 360° body rotation at low priority.
+- **`peek` activity** — Lumi slides to the island edge, looks around, and returns.
+- **Nap snore** — cheek puff oscillation during sleep, handled in engine.ts.
+
+### Renderer — visual polish
+- 3 new palettes: **Ocean**, **Midnight**, **Cherry** (`palette.ts`).
+- 3 new outfits: **Crown**, **Cape**, **Sunglasses** (`render.ts`).
+- **Rim light** on body edge, **pupil glint** (white dot in eye), **tail nub** on stalk end.
+- **Double-sine aura shimmer** — more organic glow oscillation in `drawAura()`.
+- **`treat` particle** effect for the feed event.
+
+### Settings — Pet tab
+- **Affection meter** (5 hearts + percentage) and **bond tier label** (Acquaintances → Soulmates) in a new "Bond" section.
+- **Export / Import** — clipboard-based JSON backup of all pet prefs and state.
+- New outfit labels added for crown, cape, sunglasses.
+
+### Island — Pet panel
+- **Feed button** (Cookie icon) dispatches the `feed` event via the bus.
+- **Bond tier label** shown below the affection hearts.

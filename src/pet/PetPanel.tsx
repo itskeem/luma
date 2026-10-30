@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { Hand, Home, Monitor, Moon, Sun } from "lucide-react";
+import { Hand, Home, Monitor, Moon, Sun, Cookie } from "lucide-react";
 import { getBrain } from "./brainStore";
-import { sendPetCommand } from "./bus";
-import { heartsFor, moodText } from "./mood";
+import { sendPetCommand, sendPetEvent } from "./bus";
+import { heartsFor, moodText, bondLabel } from "./mood";
 import { PetCanvas } from "./PetCanvas";
 import { usePetPrefs } from "./prefs";
 import "./pet.css";
@@ -18,15 +18,29 @@ function Heart({ on }: { on: boolean }) {
 /** The island's Pet mode: a larger Lumi, how it feels, and a few real actions. */
 export function PetPanel() {
 	const prefs = usePetPrefs();
-	const [info, setInfo] = useState(() => ({ text: "", hearts: 0, asleep: false }));
+	const [info, setInfo] = useState(() => ({ text: "", hearts: 0, asleep: false, bondLevel: 0, bondTier: "" }));
 
 	useEffect(() => {
 		const read = () => {
 			const brain = getBrain();
 			const v = brain.peek();
+			const snap = brain.snapshot();
 			setInfo((prev) => {
-				const next = { text: moodText(v, brain.isFocusing), hearts: heartsFor(v.affection), asleep: v.asleep };
-				return prev.text === next.text && prev.hearts === next.hearts && prev.asleep === next.asleep ? prev : next;
+				const next = {
+					text: moodText(v, brain.isFocusing),
+					hearts: heartsFor(v.affection),
+					asleep: v.asleep,
+					bondLevel: brain.bondLevel,
+					bondTier: bondLabel(snap.totalInteractions)
+				};
+				return (
+					prev.text === next.text &&
+					prev.hearts === next.hearts &&
+					prev.asleep === next.asleep &&
+					prev.bondLevel === next.bondLevel
+						? prev
+						: next
+				);
 			});
 		};
 		read();
@@ -49,6 +63,9 @@ export function PetPanel() {
 						<Heart key={i} on={i < info.hearts} />
 					))}
 				</div>
+				<div className="pet-bond-tier" title={`${info.bondLevel * 100}+ interactions`}>
+					{info.bondTier}
+				</div>
 				<div className="pet-actions">
 					<button
 						type="button"
@@ -58,6 +75,16 @@ export function PetPanel() {
 						}}
 					>
 						<Hand size={12} /> Wave
+					</button>
+					<button
+						type="button"
+						className="pet-action"
+						title="Give Lumi a treat"
+						onClick={() => {
+							sendPetEvent({ type: "feed" });
+						}}
+					>
+						<Cookie size={12} /> Feed
 					</button>
 					<button
 						type="button"

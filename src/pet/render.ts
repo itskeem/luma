@@ -174,10 +174,12 @@ function drawShadow(ctx: CanvasRenderingContext2D, lift: number) {
 }
 
 function drawAura(ctx: CanvasRenderingContext2D, p: PetPalette, glow: number, time: number) {
-	const pulse = 0.5 + 0.5 * Math.sin(time * 1.6);
-	const alpha = Math.min(0.55, 0.12 + glow * 0.16 + pulse * 0.04);
-	const g = ctx.createRadialGradient(50, BODY_CY - 4, 6, 50, BODY_CY - 4, 40);
+	// Two-sine shimmer for a more organic breathing feel.
+	const pulse = 0.5 + 0.5 * Math.sin(time * 1.6) * (0.75 + 0.25 * Math.sin(time * 2.7));
+	const alpha = Math.min(0.58, 0.12 + glow * 0.18 + pulse * 0.05);
+	const g = ctx.createRadialGradient(50, BODY_CY - 4, 6, 50, BODY_CY - 4, 42);
 	g.addColorStop(0, withAlpha(p.glow, alpha));
+	g.addColorStop(0.6, withAlpha(p.glow, alpha * 0.4));
 	g.addColorStop(1, withAlpha(p.glow, 0));
 	ctx.fillStyle = g;
 	ctx.fillRect(0, 0, 100, 100);
@@ -213,6 +215,17 @@ function drawBody(ctx: CanvasRenderingContext2D, p: PetPalette) {
 	ctx.ellipse(-10, -17, 14, 6.5, -0.5, 0, Math.PI * 2);
 	ctx.fill();
 	ctx.restore();
+
+	// Rim light: a thin arc on the opposite side of the highlight for depth.
+	ctx.save();
+	bodyPath(ctx);
+	ctx.clip();
+	ctx.strokeStyle = "rgba(255,255,255,0.16)";
+	ctx.lineWidth = 2.2;
+	ctx.beginPath();
+	ctx.arc(13, 8, 26, 0.6, 2.1);
+	ctx.stroke();
+	ctx.restore();
 }
 
 function drawBulb(ctx: CanvasRenderingContext2D, p: PetPalette, pose: Pose) {
@@ -225,6 +238,14 @@ function drawBulb(ctx: CanvasRenderingContext2D, p: PetPalette, pose: Pose) {
 	ctx.moveTo(0, top);
 	ctx.quadraticCurveTo(-3 + pose.bulbSway * 3, top - 9, tipX, tipY);
 	ctx.stroke();
+
+	// Rounded tail-nub at the base of the stalk — subtle tail-wag feel.
+	const nubX = pose.bulbSway * -2.5;
+	const nubY = top + 2.5;
+	ctx.fillStyle = p.dark;
+	ctx.beginPath();
+	ctx.ellipse(nubX, nubY, 3.2, 2.2, pose.bulbSway * 0.5, 0, Math.PI * 2);
+	ctx.fill();
 
 	const glow = Math.max(0, pose.glow);
 	const gr = 7 + glow * 9;
@@ -401,6 +422,16 @@ function drawEye(ctx: CanvasRenderingContext2D, p: PetPalette, pose: Pose, cx0: 
 		ctx.quadraticCurveTo(cx, by - 1.6, cx + 4, by + 0.6);
 		ctx.stroke();
 	}
+
+	// Pupil glint: a tiny white dot that tracks gaze and adds glossiness.
+	if (arcT < 1 && f.closedArc < 0.4 && f.spiral < 0.5) {
+		const gx = cx + pose.gazeX * 1.2;
+		const gy = cy + pose.gazeY * 0.8 + ry * 0.25;
+		ctx.fillStyle = "rgba(255,255,255,0.70)";
+		ctx.beginPath();
+		ctx.arc(gx + 1.2, gy - 0.8, 0.7, 0, Math.PI * 2);
+		ctx.fill();
+	}
 }
 
 function drawMouth(ctx: CanvasRenderingContext2D, pose: Pose) {
@@ -463,6 +494,12 @@ function drawOutfit(ctx: CanvasRenderingContext2D, p: PetPalette, outfit: PetOut
 			return drawHeadphones(ctx, p);
 		case "scarf":
 			return drawScarf(ctx);
+		case "crown":
+			return drawCrown(ctx);
+		case "cape":
+			return drawCape(ctx, p, pose);
+		case "sunglasses":
+			return drawSunglasses(ctx, pose);
 		default:
 			return;
 	}
@@ -586,6 +623,96 @@ function drawScarf(ctx: CanvasRenderingContext2D) {
 	ctx.beginPath();
 	ctx.moveTo(14, 27.5);
 	ctx.lineTo(20.4, 28.2);
+	ctx.stroke();
+	ctx.restore();
+}
+
+function drawCrown(ctx: CanvasRenderingContext2D) {
+	ctx.save();
+	ctx.translate(-2, -BODY_H / 2 - 2);
+	const cg = ctx.createLinearGradient(-12, -12, 12, 0);
+	cg.addColorStop(0, "#ffe066");
+	cg.addColorStop(0.5, "#ffd700");
+	cg.addColorStop(1, "#e6b800");
+	ctx.fillStyle = cg;
+	ctx.strokeStyle = "#b8860b";
+	ctx.lineWidth = 1.0;
+	// Crown base band.
+	ctx.beginPath();
+	ctx.roundRect(-10, -2, 20, 7, 2);
+	ctx.fill();
+	ctx.stroke();
+	// Three points.
+	for (const [px, ph] of [[-7, -11], [0, -14], [7, -11]] as const) {
+		ctx.beginPath();
+		ctx.moveTo(px - 4, -1);
+		ctx.lineTo(px, ph);
+		ctx.lineTo(px + 4, -1);
+		ctx.fill();
+		ctx.stroke();
+	}
+	// Jewel gems.
+	const gems = [["#ff4d6d", -7, -5], ["#7dd3fc", 0, -5], ["#a78bfa", 7, -5]] as const;
+	for (const [color, gx, gy] of gems) {
+		ctx.fillStyle = color;
+		ctx.beginPath();
+		ctx.arc(gx, gy, 1.8, 0, Math.PI * 2);
+		ctx.fill();
+	}
+	ctx.restore();
+}
+
+function drawCape(ctx: CanvasRenderingContext2D, p: PetPalette, pose: Pose) {
+	ctx.save();
+	// Cape drapes from the shoulders and flutters with tilt.
+	const flutter = Math.sin(pose.tilt * 3 + Date.now() / 600) * 2;
+	const capeCg = ctx.createLinearGradient(-24, -10, 20, 28);
+	capeCg.addColorStop(0, p.dark);
+	capeCg.addColorStop(1, withAlpha(p.dark, 0.6));
+	ctx.fillStyle = capeCg;
+	ctx.strokeStyle = withAlpha(p.dark, 0.7);
+	ctx.lineWidth = 0.8;
+	ctx.beginPath();
+	ctx.moveTo(-20, -8);
+	ctx.bezierCurveTo(-28, 4, -26 + flutter, 22, -14, 30);
+	ctx.lineTo(14, 30);
+	ctx.bezierCurveTo(26 - flutter, 22, 28, 4, 20, -8);
+	ctx.closePath();
+	ctx.fill();
+	ctx.stroke();
+	// Collar clasp.
+	ctx.fillStyle = "#ffe066";
+	ctx.beginPath();
+	ctx.arc(0, -5, 3, 0, Math.PI * 2);
+	ctx.fill();
+	ctx.restore();
+}
+
+function drawSunglasses(ctx: CanvasRenderingContext2D, pose: Pose) {
+	const fx = pose.gazeX * 1.8;
+	const fy = pose.gazeY * 1.2 - 2;
+	ctx.save();
+	ctx.translate(fx, fy);
+	ctx.strokeStyle = "#1a1020";
+	ctx.lineWidth = 1.8;
+	// Tinted lenses — wider and slightly rounder than regular glasses.
+	const lensColors = ["rgba(10,10,30,0.55)", "rgba(10,10,30,0.55)"];
+	for (const [i, x] of ([-11.5, 11.5] as const).entries()) {
+		ctx.fillStyle = lensColors[i];
+		ctx.beginPath();
+		ctx.roundRect(x - 9.5, -5.5, 19, 10, 4);
+		ctx.fill();
+		ctx.stroke();
+		// Lens glint.
+		ctx.fillStyle = "rgba(255,255,255,0.22)";
+		ctx.beginPath();
+		ctx.ellipse(x - 4, -3, 4, 1.8, -0.3, 0, Math.PI * 2);
+		ctx.fill();
+	}
+	// Bridge.
+	ctx.beginPath();
+	ctx.moveTo(-2.5, -1);
+	ctx.quadraticCurveTo(0, -3, 2.5, -1);
 	ctx.stroke();
 	ctx.restore();
 }
