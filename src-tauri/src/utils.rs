@@ -1034,8 +1034,13 @@ pub fn read_settings_file(
     path: &std::path::Path,
 ) -> Result<std::collections::HashMap<String, serde_json::Value>, String> {
     match std::fs::read_to_string(path) {
-        Ok(content) => serde_json::from_str(content.trim_start_matches('\u{feff}'))
-            .map_err(|e| format!("Invalid settings file: {e}")),
+        Ok(content) => {
+            let clean = content.trim_start_matches('\u{feff}').trim_matches('\0').trim();
+            if clean.is_empty() {
+                return Ok(Default::default());
+            }
+            serde_json::from_str(clean).map_err(|e| format!("Invalid settings file: {e}"))
+        }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Default::default()),
         Err(e) => Err(format!("Could not read settings file: {e}")),
     }
@@ -1418,6 +1423,13 @@ mod tests {
         std::fs::write(&path, "{invalid").unwrap();
         assert!(super::save_setting_file(&path, "luma-another".into(), "true".into()).is_err());
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "{invalid");
+
+        // Zero-filled / null-byte files (e.g. from NTFS allocation before flush) recover gracefully
+        std::fs::write(&path, [0u8; 512]).unwrap();
+        assert_eq!(super::read_settings_file(&path).unwrap().len(), 0);
+        super::save_setting_file(&path, "luma-recovered".into(), "true".into()).unwrap();
+        assert_eq!(super::read_settings_file(&path).unwrap().len(), 1);
+
         std::fs::remove_file(&path).unwrap();
         std::fs::remove_dir(path.parent().unwrap()).unwrap();
     }
